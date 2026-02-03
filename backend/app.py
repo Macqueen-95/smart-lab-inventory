@@ -4,7 +4,22 @@ Main Flask application file
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from flask_session import Session
-from auth import register_user, login_user, get_user_by_id, init_db
+from auth import register_user, login_user, get_user_by_id, get_user_numeric_id, init_db
+from db_management import (
+    init_tables as init_db_tables,
+    create_floor_plan,
+    get_floor_plans,
+    get_floor_plan_by_id,
+    update_floor_plan_url,
+    create_room,
+    get_rooms_by_floor_plan,
+    get_rooms,
+    get_room_by_id,
+    create_inventory_item,
+    get_inventory_items_by_room,
+    update_inventory_item_icon,
+    get_inventory_item_by_id,
+)
 import os
 from functools import wraps
 
@@ -35,13 +50,16 @@ CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credenti
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if 'user_id' not in session:
-            return jsonify({
-                "success": False,
-                "message": "Login required"
-            }), 401
+        if "user_id" not in session:
+            return jsonify({"success": False, "message": "Login required"}), 401
         return f(*args, **kwargs)
     return decorated_function
+
+
+def get_current_user_id():
+    """Return numeric user id (users.id) for the current session, or None."""
+    userid = session.get("user_id")
+    return get_user_numeric_id(userid) if userid else None
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -153,18 +171,175 @@ def get_user(userid):
             "message": f"Error: {str(e)}"
         }), 500
 
-@app.route('/api/health', methods=['GET'])
+@app.route("/api/health", methods=["GET"])
 def health():
     """Health check endpoint"""
     return jsonify({"status": "ok"}), 200
 
-if __name__ == '__main__':
+
+# ---- Floor plans ----
+
+@app.route("/api/floor-plans", methods=["POST"])
+@login_required
+def api_create_floor_plan():
+    """Create a floor plan. Body: floor_title, floor_description (optional), floor_url (optional)."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    data = request.get_json() or {}
+    title = (data.get("floor_title") or "").strip()
+    if not title:
+        return jsonify({"success": False, "message": "floor_title is required"}), 400
+    row = create_floor_plan(
+        uid,
+        title,
+        data.get("floor_description"),
+        data.get("floor_url"),
+    )
+    if not row:
+        return jsonify({"success": False, "message": "Failed to create floor plan"}), 500
+    return jsonify({"success": True, "floor_plan": row}), 201
+
+
+@app.route("/api/floor-plans", methods=["GET"])
+@login_required
+def api_list_floor_plans():
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    plans = get_floor_plans(uid)
+    return jsonify({"success": True, "floor_plans": plans}), 200
+
+
+@app.route("/api/floor-plans/<int:plan_id>", methods=["GET"])
+@login_required
+def api_get_floor_plan(plan_id):
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    plan = get_floor_plan_by_id(plan_id, uid)
+    if not plan:
+        return jsonify({"success": False, "message": "Floor plan not found"}), 404
+    return jsonify({"success": True, "floor_plan": plan}), 200
+
+
+@app.route("/api/floor-plans/<int:plan_id>", methods=["PATCH"])
+@login_required
+def api_update_floor_plan(plan_id):
+    """Update floor plan (e.g. floor_url). Body: floor_url."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    data = request.get_json() or {}
+    floor_url = data.get("floor_url")
+    if floor_url is not None:
+        ok = update_floor_plan_url(plan_id, uid, floor_url)
+        if not ok:
+            return jsonify({"success": False, "message": "Floor plan not found or update failed"}), 404
+    plan = get_floor_plan_by_id(plan_id, uid)
+    if not plan:
+        return jsonify({"success": False, "message": "Floor plan not found"}), 404
+    return jsonify({"success": True, "floor_plan": plan}), 200
+
+
+@app.route("/api/floor-plans/<int:plan_id>/rooms", methods=["POST"])
+@login_required
+def api_create_room(plan_id):
+    """Create a room under a floor plan. Body: room_name, room_description (optional)."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    data = request.get_json() or {}
+    name = (data.get("room_name") or "").strip()
+    if not name:
+        return jsonify({"success": False, "message": "room_name is required"}), 400
+    row = create_room(uid, plan_id, name, data.get("room_description"))
+    if not row:
+        return jsonify({"success": False, "message": "Failed to create room"}), 500
+    return jsonify({"success": True, "room": row}), 201
+
+
+@app.route("/api/floor-plans/<int:plan_id>/rooms", methods=["GET"])
+@login_required
+def api_list_rooms_by_plan(plan_id):
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    rooms = get_rooms_by_floor_plan(plan_id, uid)
+    return jsonify({"success": True, "rooms": rooms}), 200
+
+
+@app.route("/api/rooms", methods=["GET"])
+@login_required
+def api_list_rooms():
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    rooms = get_rooms(uid)
+    return jsonify({"success": True, "rooms": rooms}), 200
+
+
+@app.route("/api/rooms/<int:room_id>/items", methods=["GET"])
+@login_required
+def api_list_items(room_id):
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    room = get_room_by_id(room_id, uid)
+    if not room:
+        return jsonify({"success": False, "message": "Room not found"}), 404
+    items = get_inventory_items_by_room(room_id)
+    return jsonify({"success": True, "items": items}), 200
+
+
+@app.route("/api/rooms/<int:room_id>/items", methods=["POST"])
+@login_required
+def api_create_item(room_id):
+    """Create inventory item. Body: item_name, item_count (optional, default 1), item_icon_url (optional)."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    room = get_room_by_id(room_id, uid)
+    if not room:
+        return jsonify({"success": False, "message": "Room not found"}), 404
+    data = request.get_json() or {}
+    name = (data.get("item_name") or "").strip()
+    if not name:
+        return jsonify({"success": False, "message": "item_name is required"}), 400
+    count = int(data.get("item_count", 1) or 1)
+    row = create_inventory_item(room_id, name, count, data.get("item_icon_url"))
+    if not row:
+        return jsonify({"success": False, "message": "Failed to create item"}), 500
+    return jsonify({"success": True, "item": row}), 201
+
+
+@app.route("/api/items/<int:item_id>/icon", methods=["PATCH"])
+@login_required
+def api_update_item_icon(item_id):
+    """Update item icon URL. Body: item_icon_url, room_id (required to verify ownership)."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    data = request.get_json() or {}
+    url = data.get("item_icon_url")
+    room_id = data.get("room_id")
+    if not url or room_id is None:
+        return jsonify({"success": False, "message": "item_icon_url and room_id are required"}), 400
+    ok = update_inventory_item_icon(item_id, room_id, uid, url)
+    if not ok:
+        return jsonify({"success": False, "message": "Item not found or update failed"}), 404
+    item = get_inventory_item_by_id(item_id, uid)
+    return jsonify({"success": True, "item": item}), 200
+
+
+if __name__ == "__main__":
     print("=" * 50)
     print("App starting...")
     
-    # Initialize database with error handling
+    # Initialize database and tables
     try:
         init_db()
+        init_db_tables()
         print("Database initialization check completed.")
     except Exception as e:
         print(f"CRITICAL: Database initialization failed but continuing: {e}")

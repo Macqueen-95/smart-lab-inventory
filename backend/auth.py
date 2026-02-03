@@ -153,13 +153,14 @@ def get_user_by_id(userid):
     conn = get_db_connection()
     if not conn:
         return None
-    
+
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute("SELECT name, userid, created_at FROM users WHERE userid = %s", (userid,))
+            cur.execute("SELECT id, name, userid, created_at FROM users WHERE userid = %s", (userid,))
             user = cur.fetchone()
             if user:
                 return {
+                    "id": user["id"],
                     "name": user["name"],
                     "userid": user["userid"],
                     "created_at": user["created_at"].isoformat() if user["created_at"] else None,
@@ -167,6 +168,23 @@ def get_user_by_id(userid):
             return None
     except Exception as e:
         print(f"Error fetching user: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def get_user_numeric_id(userid):
+    """Return users.id (integer) for the given userid (login name), or None."""
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM users WHERE userid = %s", (userid,))
+            row = cur.fetchone()
+            return row[0] if row else None
+    except Exception as e:
+        print(f"Error getting user numeric id: {e}")
         return None
     finally:
         conn.close()

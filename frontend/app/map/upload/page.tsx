@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Input } from "@/components/ui/Input"
 import { Upload, X, Save, RotateCcw } from "lucide-react"
 import { useRouter } from "next/navigation"
-import { saveRoom, Room, InventoryItem } from "@/lib/inventory-data"
+import { floorPlansAPI, uploadToBlob } from "@/lib/api"
 
 // Standard resolution for floor maps (Full HD - most common web standard)
 const STANDARD_WIDTH = 1920
@@ -327,60 +327,50 @@ export default function FloorMapUploadPage() {
         setIsDrawing(false)
     }
 
-    // Save floor map and regions
-    const handleSaveFloorMap = () => {
+    // Save: upload image to Vercel Blob, create floor plan + rooms in backend
+    const handleSaveFloorMap = async () => {
         if (!processedImage || rooms.length === 0) return
 
         setIsSaving(true)
+        setUploadError(null)
 
-        // Store in localStorage (in production, this would go to backend)
-        const floorMapData = {
-            id: `floor-map-${Date.now()}`,
-            title: mapTitle.trim() || undefined,
-            description: mapDescription.trim() || undefined,
-            image: processedImage,
-            rooms: rooms.map((room) => ({
-                ...room,
-                // Convert absolute coordinates to percentages for responsive display
-                points: room.points.map((p) => ({
-                    x: (p.x / STANDARD_WIDTH) * 100,
-                    y: (p.y / STANDARD_HEIGHT) * 100,
-                })),
-            })),
-            createdAt: new Date().toISOString(),
-        }
+        try {
+            // Convert data URL to File and upload to Vercel Blob
+            const res = await fetch(processedImage)
+            const blob = await res.blob()
+            const file = new File([blob], "floor.png", { type: "image/png" })
+            const floorUrl = await uploadToBlob(file, "floor")
 
-        // Get existing floor maps
-        const existingMaps = JSON.parse(
-            localStorage.getItem("floorMaps") || "[]"
-        )
-        existingMaps.push(floorMapData)
-        localStorage.setItem("floorMaps", JSON.stringify(existingMaps))
+            const title = mapTitle.trim() || "Untitled Floor Plan"
+            const desc = mapDescription.trim() || undefined
 
-        // Also store as current active map
-        localStorage.setItem("activeFloorMap", JSON.stringify(floorMapData))
-
-        // Sync rooms to inventory system
-        rooms.forEach((room) => {
-            const roomId = `room-${room.id}`
-            const inventoryRoom: Room = {
-                id: roomId,
-                name: room.name,
-                title: room.name,
-                location: mapTitle.trim() || "Unknown Location",
-                description: room.components.join(", ") || undefined,
-                items: [], // Items will be added separately via manage items page
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
+            const createRes = await floorPlansAPI.create({
+                floor_title: title,
+                floor_description: desc,
+                floor_url: floorUrl,
+            })
+            if (!createRes.success || !createRes.floor_plan) {
+                setUploadError("Failed to create floor plan")
+                setIsSaving(false)
+                return
             }
 
-            saveRoom(inventoryRoom)
-        })
+            const planId = createRes.floor_plan.id
 
-        setTimeout(() => {
+            for (const room of rooms) {
+                await floorPlansAPI.createRoom(planId, {
+                    room_name: room.name,
+                    room_description: room.components.length ? room.components.join(", ") : undefined,
+                })
+            }
+
+            router.push(`/map/${planId}`)
+        } catch (e) {
+            console.error(e)
+            setUploadError(e instanceof Error ? e.message : "Save failed")
+        } finally {
             setIsSaving(false)
-            router.push(`/map/${floorMapData.id}`)
-        }, 500)
+        }
     }
 
     return (
@@ -391,6 +381,11 @@ export default function FloorMapUploadPage() {
                     <p className="text-zinc-500">
                         Upload and annotate your floor plan. Draw regions to mark rooms and labs.
                     </p>
+                    {uploadError && (
+                        <div className="mt-2 p-2 bg-red-50 border border-red-200 rounded text-red-700 text-sm">
+                            {uploadError}
+                        </div>
+                    )}
                 </div>
                 {processedImage && (
                     <div className="flex gap-2">

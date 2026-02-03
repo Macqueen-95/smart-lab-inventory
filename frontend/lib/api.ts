@@ -99,4 +99,106 @@ export const authAPI = {
   },
 }
 
+// ---- Floor plans, rooms, items (backend DB) ----
+
+export interface FloorPlan {
+  id: number
+  floor_title: string
+  floor_description: string | null
+  floor_url: string | null
+  created_at: string
+}
+
+export interface Room {
+  id: number
+  room_name: string
+  room_description: string | null
+  floor_plan_id: number
+  created_at: string
+}
+
+export interface InventoryItem {
+  id: number
+  item_name: string
+  item_count: number
+  item_icon_url: string | null
+  room_id: number
+  created_at: string
+}
+
+export const floorPlansAPI = {
+  list: async (): Promise<{ success: boolean; floor_plans: FloorPlan[] }> => {
+    const res = await api.get<{ success: boolean; floor_plans: FloorPlan[] }>("/floor-plans")
+    return res.data
+  },
+  create: async (data: {
+    floor_title: string
+    floor_description?: string
+    floor_url?: string
+  }) => {
+    const res = await api.post<{ success: boolean; floor_plan: FloorPlan }>("/floor-plans", data)
+    return res.data
+  },
+  get: async (planId: number) => {
+    const res = await api.get<{ success: boolean; floor_plan: FloorPlan }>(`/floor-plans/${planId}`)
+    return res.data
+  },
+  updateUrl: async (planId: number, floor_url: string) => {
+    const res = await api.patch<{ success: boolean; floor_plan: FloorPlan }>(`/floor-plans/${planId}`, {
+      floor_url,
+    })
+    return res.data
+  },
+  createRoom: async (planId: number, data: { room_name: string; room_description?: string }) => {
+    const res = await api.post<{ success: boolean; room: Room }>(`/floor-plans/${planId}/rooms`, data)
+    return res.data
+  },
+  listRooms: async (planId: number) => {
+    const res = await api.get<{ success: boolean; rooms: Room[] }>(`/floor-plans/${planId}/rooms`)
+    return res.data
+  },
+}
+
+export const roomsAPI = {
+  list: async (): Promise<{ success: boolean; rooms: Room[] }> => {
+    const res = await api.get<{ success: boolean; rooms: Room[] }>("/rooms")
+    return res.data
+  },
+}
+
+export const itemsAPI = {
+  listByRoom: async (roomId: number) => {
+    const res = await api.get<{ success: boolean; items: InventoryItem[] }>(`/rooms/${roomId}/items`)
+    return res.data
+  },
+  create: async (
+    roomId: number,
+    data: { item_name: string; item_count?: number; item_icon_url?: string }
+  ) => {
+    const res = await api.post<{ success: boolean; item: InventoryItem }>(`/rooms/${roomId}/items`, data)
+    return res.data
+  },
+  updateIcon: async (itemId: number, roomId: number, item_icon_url: string) => {
+    const res = await api.patch<{ success: boolean; item: InventoryItem }>(`/items/${itemId}/icon`, {
+      room_id: roomId,
+      item_icon_url,
+    })
+    return res.data
+  },
+}
+
+/** Upload a file to Vercel Blob via our API route. Returns the public URL. Call from client only. */
+export async function uploadToBlob(file: File, prefix: "floor" | "icon" = "upload"): Promise<string> {
+  const formData = new FormData()
+  formData.append("file", file)
+  formData.append("prefix", prefix)
+  const res = await fetch("/api/upload", { method: "POST", body: formData })
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}))
+    throw new Error(err.error || "Upload failed")
+  }
+  const data = await res.json()
+  return data.url
+}
+
 export default api

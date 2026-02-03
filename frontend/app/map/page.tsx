@@ -6,42 +6,39 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { Upload, Search, MapPin } from "lucide-react"
-
-interface FloorMapData {
-    id: string
-    title?: string
-    description?: string
-    image: string
-    rooms: any[]
-    createdAt: string
-}
+import { floorPlansAPI, type FloorPlan } from "@/lib/api"
 
 export default function MapListingPage() {
-    const [maps, setMaps] = useState<FloorMapData[]>([])
+    const [maps, setMaps] = useState<FloorPlan[]>([])
     const [searchQuery, setSearchQuery] = useState("")
     const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
 
     useEffect(() => {
-        // Load all floor maps from localStorage
-        const storedMaps = localStorage.getItem("floorMaps")
-        if (storedMaps) {
+        let cancelled = false
+        async function load() {
             try {
-                const parsed = JSON.parse(storedMaps)
-                setMaps(parsed)
+                const res = await floorPlansAPI.list()
+                if (!cancelled && res.success && res.floor_plans) {
+                    setMaps(res.floor_plans)
+                }
             } catch (e) {
-                console.error("Failed to parse floor maps", e)
+                if (!cancelled) setError("Failed to load floor plans")
+            } finally {
+                if (!cancelled) setIsLoading(false)
             }
         }
-        setIsLoading(false)
+        load()
+        return () => { cancelled = true }
     }, [])
 
     const filteredMaps = maps.filter((map) => {
         if (!searchQuery.trim()) return true
-        const query = searchQuery.toLowerCase()
+        const q = searchQuery.toLowerCase()
         return (
-            map.title?.toLowerCase().includes(query) ||
-            map.description?.toLowerCase().includes(query) ||
-            map.id.toLowerCase().includes(query)
+            map.floor_title?.toLowerCase().includes(q) ||
+            (map.floor_description || "").toLowerCase().includes(q) ||
+            String(map.id).includes(q)
         )
     })
 
@@ -60,20 +57,22 @@ export default function MapListingPage() {
                 </Link>
             </div>
 
-            {/* Search Bar */}
             <div className="flex items-center space-x-2">
                 <div className="relative flex-1 max-w-md">
                     <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
                     <Input
                         className="pl-9"
-                        placeholder="Search maps by title, description, or ID..."
+                        placeholder="Search maps by title or description..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                     />
                 </div>
             </div>
 
-            {/* Maps Grid */}
+            {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+            )}
+
             {isLoading ? (
                 <div className="text-center py-12 text-zinc-500">Loading maps...</div>
             ) : filteredMaps.length === 0 ? (
@@ -102,26 +101,28 @@ export default function MapListingPage() {
                         <Link key={map.id} href={`/map/${map.id}`}>
                             <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
                                 <div className="relative w-full h-48 bg-zinc-100 rounded-t-lg overflow-hidden">
-                                    <img
-                                        src={map.image}
-                                        alt={map.title || "Floor Map"}
-                                        className="w-full h-full object-contain"
-                                    />
+                                    {map.floor_url ? (
+                                        <img
+                                            src={map.floor_url}
+                                            alt={map.floor_title}
+                                            className="w-full h-full object-contain"
+                                        />
+                                    ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                            <MapPin className="h-12 w-12 text-zinc-400" />
+                                        </div>
+                                    )}
                                 </div>
                                 <CardHeader>
-                                    <CardTitle className="line-clamp-1">
-                                        {map.title || `Floor Map ${map.id.split("-").pop()}`}
-                                    </CardTitle>
+                                    <CardTitle className="line-clamp-1">{map.floor_title}</CardTitle>
                                     <CardDescription className="line-clamp-2">
-                                        {map.description || "No description provided"}
+                                        {map.floor_description || "No description"}
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
                                     <div className="flex items-center justify-between text-sm text-zinc-500">
-                                        <span>{map.rooms?.length || 0} rooms</span>
-                                        <span>
-                                            {new Date(map.createdAt).toLocaleDateString()}
-                                        </span>
+                                        <span>View details</span>
+                                        <span>{new Date(map.created_at).toLocaleDateString()}</span>
                                     </div>
                                 </CardContent>
                             </Card>
