@@ -3,7 +3,7 @@ Authentication logic for user registration and login using PostgreSQL
 """
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-import psycopg2
+import psycopg
 from psycopg2.extras import RealDictCursor
 import os
 
@@ -16,7 +16,7 @@ def get_db_connection():
         print("Error: DATABASE_URL not set")
         return None
     try:
-        conn = psycopg2.connect(DB_URL)
+        conn = psycopg.connect(DB_URL)
         return conn
     except Exception as e:
         print(f"Error connecting to database: {e}")
