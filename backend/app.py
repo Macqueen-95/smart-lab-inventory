@@ -11,18 +11,18 @@ from functools import wraps
 app = Flask(__name__)
 
 # Session configuration
-app.config['SECRET_KEY'] = 'super-secret-key' # In production, use a secure secret key
+app.config['SECRET_KEY'] = os.environ.get('SESSION_SECRET_KEY', 'super-secret-key-change-me')
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_PERMANENT'] = False
 app.config['SESSION_USE_SIGNER'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_SECURE'] = False # Set to True in production with HTTPS
+app.config['SESSION_COOKIE_SECURE'] = True  # Required for SAMESITE='None'
 
 Session(app)
 
-# Simplified CORS configuration - allow all origins for all /api/ routes
-# supports_credentials=True is required for session cookies
-CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+# CORS configuration - allow specific frontend origin in production
+frontend_url = os.environ.get('FRONTEND_URL', '*')
+CORS(app, resources={r"/api/*": {"origins": [frontend_url] if frontend_url != '*' else '*'}}, supports_credentials=True)
 
 def login_required(f):
     @wraps(f)
