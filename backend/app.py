@@ -151,14 +151,25 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 if __name__ == '__main__':
-    # Initialize database
-    init_db()
+    print("=" * 50)
+    print("App starting...")
     
-    print("=" * 50)
-    print("Starting Flask server on http://localhost:8000")
+    # Initialize database with error handling
+    try:
+        init_db()
+        print("Database initialization check completed.")
+    except Exception as e:
+        print(f"CRITICAL: Database initialization failed but continuing: {e}")
+    
+    # Final startup sequence
+    port = int(os.environ.get("PORT", 8000))
+    print(f"Starting Flask server on http://0.0.0.0:{port}")
     print("CORS enabled with credentials")
-    print("Database: PostgreSQL")
     print("=" * 50)
-    app.run(debug=True, port=8000, host='0.0.0.0')
+    
+    try:
+        app.run(debug=True, port=port, host='0.0.0.0')
+    except Exception as e:
+        print(f"CRITICAL: Flask failed to start: {e}")
 
 

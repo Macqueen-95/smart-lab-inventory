@@ -12,6 +12,9 @@ DB_URL = os.environ.get("DATABASE_URL", "postgresql://admin:GyTAXZ4EXHJYwrtgNlC3
 
 def get_db_connection():
     """Establish a connection to the PostgreSQL database"""
+    if not DB_URL:
+        print("Error: DATABASE_URL not set")
+        return None
     try:
         conn = psycopg2.connect(DB_URL)
         return conn
@@ -21,11 +24,14 @@ def get_db_connection():
 
 def init_db():
     """Initialize the database tables if they don't exist"""
-    conn = get_db_connection()
-    if not conn:
-        return
-    
+    print("Initializing database...")
+    conn = None
     try:
+        conn = get_db_connection()
+        if not conn:
+            print("Skipping DB init: Could not establish connection.")
+            return
+        
         with conn.cursor() as cur:
             cur.execute("""
                 CREATE TABLE IF NOT EXISTS users (
@@ -37,11 +43,12 @@ def init_db():
                 );
             """)
             conn.commit()
-            print("Database initialized successfully.")
+            print("DB connected and tables verified.")
     except Exception as e:
-        print(f"Error initializing database: {e}")
+        print(f"Database error during init: {e}")
     finally:
-        conn.close()
+        if conn:
+            conn.close()
 
 def register_user(name, userid, password, confirm_password):
     """
