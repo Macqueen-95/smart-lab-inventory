@@ -59,8 +59,7 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-4">
-            <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md shadow-xl">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
                         <div className="p-3 bg-green-100 rounded-full">
@@ -163,6 +162,5 @@ export default function RegisterPage() {
                     </form>
                 </CardContent>
             </Card>
-        </div>
     )
 }

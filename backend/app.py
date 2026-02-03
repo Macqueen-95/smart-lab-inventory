@@ -10,19 +10,27 @@ from functools import wraps
 
 app = Flask(__name__)
 
-# Session configuration
-app.config['SECRET_KEY'] = os.environ.get('SESSION_SECRET_KEY', 'super-secret-key-change-me')
-app.config['SESSION_TYPE'] = 'filesystem'
-app.config['SESSION_PERMANENT'] = False
-app.config['SESSION_USE_SIGNER'] = True
-app.config['SESSION_COOKIE_SAMESITE'] = 'None'
-app.config['SESSION_COOKIE_SECURE'] = True  # Required for SAMESITE='None'
+# Session configuration (cookie stored in browser, validated server-side)
+app.config["SECRET_KEY"] = os.environ.get("SESSION_SECRET_KEY", "super-secret-key-change-me")
+app.config["SESSION_TYPE"] = "filesystem"
+app.config["SESSION_PERMANENT"] = False
+app.config["SESSION_USE_SIGNER"] = True
+# For HTTPS (e.g. Render): SameSite=None, Secure=True. Render sets RENDER=true.
+is_production = (
+    os.environ.get("RENDER") == "true"
+    or os.environ.get("FLASK_ENV") == "production"
+    or os.environ.get("ENV") == "production"
+)
+app.config["SESSION_COOKIE_SAMESITE"] = "None" if is_production else "Lax"
+app.config["SESSION_COOKIE_SECURE"] = is_production
+app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 Session(app)
 
-# CORS configuration - allow specific frontend origin in production
-frontend_url = os.environ.get('FRONTEND_URL', '*')
-CORS(app, resources={r"/api/*": {"origins": [frontend_url] if frontend_url != '*' else '*'}}, supports_credentials=True)
+# CORS: set FRONTEND_URL to your Render frontend URL (e.g. https://your-app.onrender.com)
+frontend_url = os.environ.get("FRONTEND_URL", "*")
+allowed_origins = [frontend_url] if frontend_url != "*" else "*"
+CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
 
 def login_required(f):
     @wraps(f)

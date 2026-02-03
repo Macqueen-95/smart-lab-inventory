@@ -2,13 +2,15 @@
 Authentication logic for user registration and login using PostgreSQL
 """
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
 import psycopg
-from psycopg2.extras import RealDictCursor
+from psycopg.rows import dict_row
 import os
 
 # Database connection URL - prioritizes environment variable for deployment
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://admin:GyTAXZ4EXHJYwrtgNlC31W7ClPs3ULEq@dpg-d613k794tr6s73824ah0-a.singapore-postgres.render.com/smart_sol")
+DB_URL = os.environ.get(
+    "DATABASE_URL",
+    "postgresql://admin:GyTAXZ4EXHJYwrtgNlC31W7ClPs3ULEq@dpg-d613k794tr6s73824ah0-a.singapore-postgres.render.com/smart_sol",
+)
 
 def get_db_connection():
     """Establish a connection to the PostgreSQL database"""
@@ -16,7 +18,11 @@ def get_db_connection():
         print("Error: DATABASE_URL not set")
         return None
     try:
-        conn = psycopg.connect(DB_URL)
+        # Render and other cloud Postgres often require SSL
+        url = DB_URL
+        if "render.com" in url and "sslmode" not in url:
+            url = f"{url}?sslmode=require" if "?" not in url else f"{url}&sslmode=require"
+        conn = psycopg.connect(url)
         return conn
     except Exception as e:
         print(f"Error connecting to database: {e}")
@@ -117,24 +123,24 @@ def login_user(userid, password):
         return {"success": False, "message": "Database connection failed"}
     
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT * FROM users WHERE userid = %s", (userid.strip(),))
             user = cur.fetchone()
             
             if not user:
                 return {"success": False, "message": "Invalid user ID or password"}
             
-            if not check_password_hash(user['password_hash'], password):
+            if not check_password_hash(user["password_hash"], password):
                 return {"success": False, "message": "Invalid user ID or password"}
             
             return {
                 "success": True,
                 "message": "Login successful",
                 "user": {
-                    "id": user['id'],
+                    "id": user["id"],
                     "name": user["name"],
-                    "userid": user["userid"]
-                }
+                    "userid": user["userid"],
+                },
             }
     except Exception as e:
         print(f"Error during login: {e}")
@@ -149,14 +155,14 @@ def get_user_by_id(userid):
         return None
     
     try:
-        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
             cur.execute("SELECT name, userid, created_at FROM users WHERE userid = %s", (userid,))
             user = cur.fetchone()
             if user:
                 return {
                     "name": user["name"],
                     "userid": user["userid"],
-                    "created_at": user["created_at"].isoformat() if user["created_at"] else None
+                    "created_at": user["created_at"].isoformat() if user["created_at"] else None,
                 }
             return None
     except Exception as e:

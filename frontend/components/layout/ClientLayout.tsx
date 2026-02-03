@@ -12,21 +12,20 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        async function checkAuth() {
-            if (isAuthPage) {
-                setIsLoading(false);
-                return;
-            }
+        if (isAuthPage) setIsLoading(false);
 
+        async function checkAuth() {
             try {
                 const result = await authAPI.getMe();
-                if (!result.success) {
-                    router.push("/login");
+                if (isAuthPage) {
+                    if (result.success) router.push("/");
+                    return;
                 }
-            } catch (error) {
-                router.push("/login");
+                if (!result.success) router.push("/login");
+            } catch (_error) {
+                if (!isAuthPage) router.push("/login");
             } finally {
-                setIsLoading(false);
+                if (!isAuthPage) setIsLoading(false);
             }
         }
 
@@ -41,11 +40,20 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
         );
     }
 
+    // Full-page layout for login/register: no sidebar, centered on viewport
+    if (isAuthPage) {
+        return (
+            <div className="fixed inset-0 flex items-center justify-center bg-zinc-100 p-4">
+                {children}
+            </div>
+        );
+    }
+
     return (
         <>
-            {!isAuthPage && <AppSidebar />}
+            <AppSidebar />
             <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-                <main className={isAuthPage ? "flex-1 overflow-y-auto" : "flex-1 overflow-y-auto p-4 md:p-8"}>
+                <main className="flex-1 overflow-y-auto p-4 md:p-8">
                     {children}
                 </main>
             </div>

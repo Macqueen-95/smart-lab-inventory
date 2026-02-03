@@ -27,14 +27,8 @@ export default function LoginPage() {
             const result = await authAPI.login(formData)
             
             if (result.success) {
-                // Store user info in localStorage
-                localStorage.setItem("user", JSON.stringify(result.user))
-                localStorage.setItem("isAuthenticated", "true")
-                
-                // Dispatch custom event to update sidebar
-                window.dispatchEvent(new Event('authChange'))
-                
-                // Redirect to dashboard
+                // Session cookie is set by backend (withCredentials). No localStorage for auth.
+                window.dispatchEvent(new Event("authChange"))
                 router.push("/")
             } else {
                 setError(result.message || "Login failed")
@@ -47,8 +41,7 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-zinc-50 p-4">
-            <Card className="w-full max-w-md">
+        <Card className="w-full max-w-md shadow-xl">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
                         <div className="p-3 bg-blue-100 rounded-full">
@@ -114,6 +107,5 @@ export default function LoginPage() {
                     </form>
                 </CardContent>
             </Card>
-        </div>
     )
 }
