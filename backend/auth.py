@@ -7,8 +7,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 import os
 
-# Database connection URL
-DB_URL = "postgresql://admin:GyTAXZ4EXHJYwrtgNlC31W7ClPs3ULEq@dpg-d613k794tr6s73824ah0-a.singapore-postgres.render.com/smart_sol"
+# Database connection URL - prioritizes environment variable for deployment
+DB_URL = os.environ.get("DATABASE_URL", "postgresql://admin:GyTAXZ4EXHJYwrtgNlC31W7ClPs3ULEq@dpg-d613k794tr6s73824ah0-a.singapore-postgres.render.com/smart_sol")
 
 def get_db_connection():
     """Establish a connection to the PostgreSQL database"""
