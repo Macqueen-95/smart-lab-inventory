@@ -188,7 +188,7 @@ export const itemsAPI = {
 }
 
 /** Upload a file to Vercel Blob via our API route. Returns the public URL. Call from client only. */
-export async function uploadToBlob(file: File, prefix: "floor" | "icon" = "upload"): Promise<string> {
+export async function uploadToBlob(file: File, prefix: "floor" | "icon" | "upload" = "upload"): Promise<string> {
   const formData = new FormData()
   formData.append("file", file)
   formData.append("prefix", prefix)
