@@ -1,15 +1,39 @@
 """
 Main Flask application file
 """
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, session
 from flask_cors import CORS
-from auth import register_user, login_user, get_user_by_id
+from flask_session import Session
+from auth import register_user, login_user, get_user_by_id, init_db
 import os
+from functools import wraps
 
 app = Flask(__name__)
 
+# Session configuration
+app.config['SECRET_KEY'] = 'super-secret-key' # In production, use a secure secret key
+app.config['SESSION_TYPE'] = 'filesystem'
+app.config['SESSION_PERMANENT'] = False
+app.config['SESSION_USE_SIGNER'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'None'
+app.config['SESSION_COOKIE_SECURE'] = False # Set to True in production with HTTPS
+
+Session(app)
+
 # Simplified CORS configuration - allow all origins for all /api/ routes
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+# supports_credentials=True is required for session cookies
+CORS(app, resources={r"/api/*": {"origins": "*"}}, supports_credentials=True)
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return jsonify({
+                "success": False,
+                "message": "Login required"
+            }), 401
+        return f(*args, **kwargs)
+    return decorated_function
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -59,6 +83,9 @@ def login():
         result = login_user(userid, password)
         
         if result['success']:
+            # Store user info in session
+            session['user_id'] = result['user']['userid']
+            session['user_name'] = result['user']['name']
             return jsonify(result), 200
         else:
             return jsonify(result), 401
@@ -69,9 +96,37 @@ def login():
             "message": f"Login failed: {str(e)}"
         }), 500
 
+@app.route('/api/logout', methods=['POST'])
+@login_required
+def logout():
+    """User logout endpoint"""
+    session.clear()
+    return jsonify({
+        "success": True,
+        "message": "Logged out successfully"
+    }), 200
+
+@app.route('/api/user/me', methods=['GET'])
+@login_required
+def get_current_user():
+    """Get currently logged-in user information"""
+    userid = session.get('user_id')
+    user = get_user_by_id(userid)
+    if user:
+        return jsonify({
+            "success": True,
+            "user": user
+        }), 200
+    else:
+        return jsonify({
+            "success": False,
+            "message": "User not found"
+        }), 404
+
 @app.route('/api/user/<userid>', methods=['GET'])
+@login_required
 def get_user(userid):
-    """Get user information"""
+    """Get user information (protected)"""
     try:
         user = get_user_by_id(userid)
         if user:
@@ -96,15 +151,14 @@ def health():
     return jsonify({"status": "ok"}), 200
 
 if __name__ == '__main__':
-    # Create users.json if it doesn't exist
-    if not os.path.exists('users.json'):
-        with open('users.json', 'w') as f:
-            import json
-            json.dump([], f)
+    # Initialize database
+    init_db()
     
     print("=" * 50)
     print("Starting Flask server on http://localhost:8000")
-    print("CORS enabled for ALL origins")
+    print("CORS enabled with credentials")
+    print("Database: PostgreSQL")
     print("=" * 50)
     app.run(debug=True, port=8000, host='0.0.0.0')
+
 

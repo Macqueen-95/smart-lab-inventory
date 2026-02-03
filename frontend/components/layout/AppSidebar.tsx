@@ -6,6 +6,7 @@ import { LayoutDashboard, Map, Package, ClipboardList, Settings, Menu, ChevronLe
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
+import { authAPI } from "@/lib/api"
 
 const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -23,25 +24,23 @@ export function AppSidebar() {
     const [isAuthenticated, setIsAuthenticated] = useState(false)
     const [user, setUser] = useState<{ name: string; userid: string } | null>(null)
 
-    const checkAuth = () => {
-        const authStatus = localStorage.getItem("isAuthenticated")
-        const userData = localStorage.getItem("user")
-        
-        if (authStatus === "true" && userData) {
-            setIsAuthenticated(true)
-            try {
-                setUser(JSON.parse(userData))
-            } catch (e) {
+    const checkAuth = async () => {
+        try {
+            const result = await authAPI.getMe()
+            if (result.success && result.user) {
+                setIsAuthenticated(true)
+                setUser(result.user)
+            } else {
                 setIsAuthenticated(false)
                 setUser(null)
             }
-        } else {
+        } catch (e) {
             setIsAuthenticated(false)
             setUser(null)
         }
     }
 
-    // Load collapsed state and auth state from localStorage
+    // Load collapsed state from localStorage
     useEffect(() => {
         const saved = localStorage.getItem("sidebarCollapsed")
         if (saved === "true") {
@@ -59,11 +58,9 @@ export function AppSidebar() {
         }
 
         window.addEventListener('authChange', handleAuthChange)
-        window.addEventListener('storage', handleAuthChange)
 
         return () => {
             window.removeEventListener('authChange', handleAuthChange)
-            window.removeEventListener('storage', handleAuthChange)
         }
     }, [])
 
@@ -73,15 +70,19 @@ export function AppSidebar() {
         localStorage.setItem("sidebarCollapsed", String(newState))
     }
 
-    const handleLogout = () => {
-        localStorage.removeItem("isAuthenticated")
-        localStorage.removeItem("user")
+    const handleLogout = async () => {
+        try {
+            await authAPI.logout()
+        } catch (err) {
+            console.error("Logout failed", err)
+        }
+
         setIsAuthenticated(false)
         setUser(null)
-        
+
         // Dispatch custom event to update sidebar
         window.dispatchEvent(new Event('authChange'))
-        
+
         router.push("/login")
     }
 

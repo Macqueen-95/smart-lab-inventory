@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AppSidebar } from "@/components/layout/AppSidebar";
+import { ClientLayout } from "@/components/layout/ClientLayout";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,16 +28,7 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased flex h-screen overflow-hidden bg-zinc-50`}
       >
-        <AppSidebar />
-        <div className="flex-1 flex flex-col min-h-0 overflow-hidden relative">
-          {/* Mobile Header is inside AppSidebar for now, or we can handle it here if better. 
-                AppSidebar handles the mobile trigger button.
-                We need a container for the page content.
-            */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-8">
-            {children}
-          </main>
-        </div>
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

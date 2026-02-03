@@ -4,6 +4,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/a
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -55,6 +56,30 @@ export const authAPI = {
         return error.response.data
       }
       // Otherwise throw the error
+      throw error
+    }
+  },
+
+  getMe: async (): Promise<AuthResponse> => {
+    try {
+      const response = await api.get<AuthResponse>('/user/me')
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        return error.response.data
+      }
+      throw error
+    }
+  },
+
+  logout: async (): Promise<AuthResponse> => {
+    try {
+      const response = await api.post<AuthResponse>('/logout')
+      return response.data
+    } catch (error: any) {
+      if (error.response?.data) {
+        return error.response.data
+      }
       throw error
     }
   },
