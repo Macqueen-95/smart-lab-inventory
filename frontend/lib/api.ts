@@ -132,6 +132,23 @@ export interface InventoryItem {
   last_scanned_at?: string | null
 }
 
+export interface Audit {
+  id: number
+  scheduled_date: string
+  floor_plan_id?: number | null
+  room_id?: number | null
+  assigned_userid: string
+  assigned_by: string
+  status: string
+  scanner_id?: string | null
+  started_at?: string | null
+  completed_at?: string | null
+  created_at?: string | null
+  room_name?: string | null
+  floor_title?: string | null
+  assigned_name?: string | null
+}
+
 export const floorPlansAPI = {
   list: async (): Promise<{ success: boolean; floor_plans: FloorPlan[] }> => {
     const res = await api.get<{ success: boolean; floor_plans: FloorPlan[] }>("/floor-plans")
@@ -176,6 +193,13 @@ export const roomsAPI = {
     room_description?: string
   }): Promise<{ success: boolean; room?: Room; message?: string }> => {
     const res = await api.post<{ success: boolean; room?: Room; message?: string }>("/rooms", data)
+    return res.data
+  },
+}
+
+export const usersAPI = {
+  list: async (): Promise<{ success: boolean; users: Array<{ id: number; name: string; userid: string }> }> => {
+    const res = await api.get<{ success: boolean; users: Array<{ id: number; name: string; userid: string }> }>("/users")
     return res.data
   },
 }
@@ -297,6 +321,42 @@ export const serviceAPI = {
         floor_title: string
       }
     }>(`/service/item-by-rfid/${rfid_uid}`)
+    return res.data
+  },
+}
+
+export const auditingAPI = {
+  list: async (date?: string): Promise<{ success: boolean; audits: Audit[] }> => {
+    const res = await api.get<{ success: boolean; audits: Audit[] }>("/audits", {
+      params: date ? { date } : undefined,
+    })
+    return res.data
+  },
+  get: async (auditId: number): Promise<{ success: boolean; audit?: Audit }> => {
+    const res = await api.get<{ success: boolean; audit?: Audit }>(`/audits/${auditId}`)
+    return res.data
+  },
+  create: async (data: {
+    scheduled_date: string
+    floor_plan_id?: number | null
+    room_id?: number | null
+    assigned_userid: string
+  }): Promise<{ success: boolean; audit?: Audit; message?: string }> => {
+    const res = await api.post<{ success: boolean; audit?: Audit; message?: string }>("/audits", data)
+    return res.data
+  },
+  start: async (auditId: number, scanner_id: string): Promise<{ success: boolean; audit?: Audit; message?: string }> => {
+    const res = await api.post<{ success: boolean; audit?: Audit; message?: string }>(`/audits/${auditId}/start`, {
+      scanner_id,
+    })
+    return res.data
+  },
+  complete: async (auditId: number): Promise<{ success: boolean; audit?: Audit; message?: string }> => {
+    const res = await api.post<{ success: boolean; audit?: Audit; message?: string }>(`/audits/${auditId}/complete`)
+    return res.data
+  },
+  report: async (auditId: number): Promise<{ success: boolean; report?: any; message?: string }> => {
+    const res = await api.get<{ success: boolean; report?: any; message?: string }>(`/audits/${auditId}/report`)
     return res.data
   },
 }

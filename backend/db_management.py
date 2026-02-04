@@ -70,6 +70,22 @@ def init_tables(conn=None):
                 ALTER TABLE service 
                 ALTER COLUMN out_datetime SET DEFAULT CURRENT_TIMESTAMP
             """)
+
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS audits (
+                    id SERIAL PRIMARY KEY,
+                    scheduled_date DATE NOT NULL,
+                    floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE SET NULL,
+                    room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+                    assigned_userid VARCHAR(50) NOT NULL,
+                    assigned_by VARCHAR(50) NOT NULL,
+                    status VARCHAR(20) NOT NULL DEFAULT 'ASSIGNED',
+                    scanner_id VARCHAR(50),
+                    started_at TIMESTAMP,
+                    completed_at TIMESTAMP,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
             
             conn.commit()
     except Exception as e:

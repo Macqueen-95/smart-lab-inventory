@@ -188,3 +188,27 @@ def get_user_numeric_id(userid):
         return None
     finally:
         conn.close()
+
+
+def list_users():
+    """Return basic user list for admin assignment."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT id, name, userid, created_at FROM users ORDER BY created_at DESC")
+            return [
+                {
+                    "id": r["id"],
+                    "name": r["name"],
+                    "userid": r["userid"],
+                    "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                }
+                for r in cur.fetchall()
+            ]
+    except Exception as e:
+        print(f"Error listing users: {e}")
+        return []
+    finally:
+        conn.close()

@@ -4,7 +4,7 @@ Main Flask application file
 from flask import Flask, request, jsonify, session
 from flask_cors import CORS
 from flask_session import Session
-from auth import register_user, login_user, get_user_by_id, get_user_numeric_id, init_db
+from auth import register_user, login_user, get_user_by_id, get_user_numeric_id, init_db, list_users
 from db_management import (
     init_tables as init_db_tables,
     create_floor_plan,
@@ -30,6 +30,14 @@ from serviceandrepair import (
     get_items_out_for_service,
     get_all_service_history,
     get_item_by_rfid_for_service,
+)
+from auditing import (
+    create_audit,
+    list_audits,
+    get_audit_by_id,
+    start_audit,
+    complete_audit,
+    generate_audit_report,
 )
 import os
 from functools import wraps
@@ -71,6 +79,10 @@ def get_current_user_id():
     """Return numeric user id (users.id) for the current session, or None."""
     userid = session.get("user_id")
     return get_user_numeric_id(userid) if userid else None
+
+
+def is_admin_user(userid: str | None) -> bool:
+    return userid == "admin"
 
 @app.route('/api/register', methods=['POST'])
 def register():
@@ -592,6 +604,134 @@ def get_item_for_service(rfid_uid):
         return jsonify({"success": True, "item": item}), 200
     else:
         return jsonify({"success": False, "message": "Item not found"}), 404
+
+
+# ---- Auditing ----
+
+@app.route("/api/users", methods=["GET"])
+@login_required
+def list_users_admin():
+    userid = session.get("user_id")
+    if not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin only"}), 403
+    return jsonify({"success": True, "users": list_users()}), 200
+
+
+@app.route("/api/audits", methods=["GET"])
+@login_required
+def list_audits_api():
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    date = request.args.get("date")
+    include_all = is_admin_user(userid)
+    audits = list_audits(assigned_userid=userid, scheduled_date=date, include_all=include_all)
+    return jsonify({"success": True, "audits": audits}), 200
+
+
+@app.route("/api/audits", methods=["POST"])
+@login_required
+def create_audit_api():
+    userid = session.get("user_id")
+    if not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin only"}), 403
+
+    data = request.get_json() or {}
+    scheduled_date = data.get("scheduled_date")
+    floor_plan_id = data.get("floor_plan_id")
+    room_id = data.get("room_id")
+    assigned_userid = data.get("assigned_userid")
+
+    if not scheduled_date or not assigned_userid:
+        return jsonify({"success": False, "message": "scheduled_date and assigned_userid are required"}), 400
+
+    result = create_audit(scheduled_date, floor_plan_id, room_id, assigned_userid, userid)
+    if result:
+        return jsonify({"success": True, "audit": result}), 201
+    return jsonify({"success": False, "message": "Failed to create audit"}), 500
+
+
+@app.route("/api/audits/<int:audit_id>", methods=["GET"])
+@login_required
+def get_audit_api(audit_id: int):
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    audit = get_audit_by_id(audit_id)
+    if not audit:
+        return jsonify({"success": False, "message": "Audit not found"}), 404
+
+    if not is_admin_user(userid) and audit.get("assigned_userid") != userid:
+        return jsonify({"success": False, "message": "Forbidden"}), 403
+
+    return jsonify({"success": True, "audit": audit}), 200
+
+
+@app.route("/api/audits/<int:audit_id>/start", methods=["POST"])
+@login_required
+def start_audit_api(audit_id: int):
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    audit = get_audit_by_id(audit_id)
+    if not audit:
+        return jsonify({"success": False, "message": "Audit not found"}), 404
+
+    if not is_admin_user(userid) and audit.get("assigned_userid") != userid:
+        return jsonify({"success": False, "message": "Forbidden"}), 403
+
+    data = request.get_json() or {}
+    scanner_id = data.get("scanner_id")
+    if not scanner_id:
+        return jsonify({"success": False, "message": "scanner_id is required"}), 400
+
+    updated = start_audit(audit_id, scanner_id)
+    if updated:
+        return jsonify({"success": True, "audit": updated}), 200
+    return jsonify({"success": False, "message": "Failed to start audit"}), 500
+
+
+@app.route("/api/audits/<int:audit_id>/complete", methods=["POST"])
+@login_required
+def complete_audit_api(audit_id: int):
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    audit = get_audit_by_id(audit_id)
+    if not audit:
+        return jsonify({"success": False, "message": "Audit not found"}), 404
+
+    if not is_admin_user(userid) and audit.get("assigned_userid") != userid:
+        return jsonify({"success": False, "message": "Forbidden"}), 403
+
+    updated = complete_audit(audit_id)
+    if updated:
+        return jsonify({"success": True, "audit": updated}), 200
+    return jsonify({"success": False, "message": "Failed to complete audit"}), 500
+
+
+@app.route("/api/audits/<int:audit_id>/report", methods=["GET"])
+@login_required
+def audit_report_api(audit_id: int):
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    audit = get_audit_by_id(audit_id)
+    if not audit:
+        return jsonify({"success": False, "message": "Audit not found"}), 404
+
+    if not is_admin_user(userid) and audit.get("assigned_userid") != userid:
+        return jsonify({"success": False, "message": "Forbidden"}), 403
+
+    report = generate_audit_report(audit_id)
+    if report:
+        return jsonify({"success": True, "report": report}), 200
+    return jsonify({"success": False, "message": "Failed to generate report"}), 500
 
 
 if __name__ == "__main__":
