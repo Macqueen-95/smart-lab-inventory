@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { LayoutDashboard, Map, Package, ClipboardList, Settings, Menu, ChevronLeft, ChevronRight, LogIn, LogOut } from "lucide-react"
+import { LayoutDashboard, Map, Package, ClipboardList, Settings, Menu, ChevronLeft, ChevronRight, LogIn, LogOut, Wrench } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/Button"
@@ -12,6 +12,7 @@ const navItems = [
     { href: "/", label: "Dashboard", icon: LayoutDashboard },
     { href: "/map", label: "Floor Map", icon: Map },
     { href: "/inventory", label: "Inventory", icon: Package },
+    { href: "/serviceandrepair", label: "Service & Repair", icon: Wrench },
     { href: "/logs", label: "Logs", icon: ClipboardList },
     { href: "/admin", label: "Admin", icon: Settings },
 ]

@@ -243,6 +243,55 @@ export const rfidAPI = {
   },
 }
 
+// ---- Service & Repair Management ----
+
+export interface ServiceRecord {
+  id: number
+  item_id: number
+  rfid_uid: string
+  item_name: string
+  room_name: string
+  floor_title: string
+  out_date: string
+  in_date?: string | null
+  status: string
+}
+
+export const serviceAPI = {
+  sendOut: async (rfid_uid: string) => {
+    const res = await api.post<{ success: boolean; service_record?: ServiceRecord; message?: string }>(
+      "/service/out",
+      { rfid_uid }
+    )
+    return res.data
+  },
+  receiveIn: async (rfid_uid: string) => {
+    const res = await api.post<{ success: boolean; message?: string }>("/service/in", { rfid_uid })
+    return res.data
+  },
+  getOutItems: async () => {
+    const res = await api.get<{ success: boolean; items: ServiceRecord[] }>("/service/out-items")
+    return res.data
+  },
+  getHistory: async () => {
+    const res = await api.get<{ success: boolean; history: ServiceRecord[] }>("/service/history")
+    return res.data
+  },
+  getItemByRfid: async (rfid_uid: string) => {
+    const res = await api.get<{
+      success: boolean
+      item?: {
+        id: number
+        item_name: string
+        rfid_uid: string
+        room_name: string
+        floor_title: string
+      }
+    }>(`/service/item-by-rfid/${rfid_uid}`)
+    return res.data
+  },
+}
+
 /** Upload a file to Vercel Blob via our API route. Returns the public URL. Call from client only. */
 export async function uploadToBlob(file: File, prefix: "floor" | "icon" | "upload" = "upload"): Promise<string> {
   const formData = new FormData()

@@ -24,6 +24,13 @@ from db_management import (
     get_latest_unassigned_rfid,
 )
 from rfid_uid import process_rfid_scan, assign_rfid_uid_to_item
+from serviceandrepair import (
+    send_item_out_for_service,
+    receive_item_from_service,
+    get_items_out_for_service,
+    get_all_service_history,
+    get_item_by_rfid_for_service,
+)
 import os
 from functools import wraps
 
@@ -419,6 +426,104 @@ def api_get_latest_unassigned_rfid():
         return jsonify({"success": True, "rfid_uid": result["rfid_uid"], "scanned_at": result["scanned_at"]}), 200
     else:
         return jsonify({"success": False, "message": "No unassigned scans found"}), 404
+
+
+# ---- Service & Repair Routes ----
+
+@app.route("/api/service/out", methods=["POST"])
+@login_required
+def send_out_for_service():
+    """Send an item out for service."""
+    uid = get_user_numeric_id(session.get("userid"))
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    data = request.get_json()
+    rfid_uid = data.get("rfid_uid", "").strip()
+    
+    if not rfid_uid:
+        return jsonify({"success": False, "message": "RFID UID required"}), 400
+    
+    # Get item by RFID
+    item = get_item_by_rfid_for_service(rfid_uid)
+    if not item:
+        return jsonify({"success": False, "message": "Item not found"}), 404
+    
+    result = send_item_out_for_service(item["id"], rfid_uid)
+    
+    if result and "error" not in result:
+        return jsonify({"success": True, "service_record": result}), 201
+    elif result and "error" in result:
+        return jsonify({"success": False, "message": result["error"]}), 400
+    else:
+        return jsonify({"success": False, "message": "Failed to send item out"}), 500
+
+
+@app.route("/api/service/in", methods=["POST"])
+@login_required
+def receive_from_service():
+    """Mark an item as returned from service."""
+    uid = get_user_numeric_id(session.get("userid"))
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    data = request.get_json()
+    rfid_uid = data.get("rfid_uid", "").strip()
+    
+    if not rfid_uid:
+        return jsonify({"success": False, "message": "RFID UID required"}), 400
+    
+    # Get item by RFID
+    item = get_item_by_rfid_for_service(rfid_uid)
+    if not item:
+        return jsonify({"success": False, "message": "Item not found"}), 404
+    
+    success = receive_item_from_service(item["id"])
+    
+    if success:
+        return jsonify({"success": True, "message": "Item received from service"}), 200
+    else:
+        return jsonify({"success": False, "message": "Failed to receive item or not out for service"}), 400
+
+
+@app.route("/api/service/out-items", methods=["GET"])
+@login_required
+def list_items_out_for_service():
+    """Get all items currently out for service."""
+    uid = get_user_numeric_id(session.get("userid"))
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    items = get_items_out_for_service()
+    return jsonify({"success": True, "items": items}), 200
+
+
+@app.route("/api/service/history", methods=["GET"])
+@login_required
+def list_service_history():
+    """Get all service history."""
+    uid = get_user_numeric_id(session.get("userid"))
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    history = get_all_service_history()
+    return jsonify({"success": True, "history": history}), 200
+
+
+@app.route("/api/service/item-by-rfid/<rfid_uid>", methods=["GET"])
+@login_required
+def get_item_for_service(rfid_uid):
+    """Get item details by RFID for service operations."""
+    uid = get_user_numeric_id(session.get("userid"))
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    item = get_item_by_rfid_for_service(rfid_uid)
+    
+    if item:
+        return jsonify({"success": True, "item": item}), 200
+    else:
+        return jsonify({"success": False, "message": "Item not found"}), 404
 
 
 if __name__ == "__main__":
