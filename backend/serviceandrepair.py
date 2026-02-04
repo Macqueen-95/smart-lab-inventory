@@ -8,8 +8,10 @@ from auth import get_db_connection
 
 def send_item_out_for_service(item_id: int, rfid_uid: str):
     """Mark an item as out for service. Returns the service record or None."""
+    print(f"[send_item_out_for_service] Called with item_id={item_id}, rfid_uid={rfid_uid}")
     conn = get_db_connection()
     if not conn:
+        print("[send_item_out_for_service] Failed to get DB connection")
         return None
     try:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -27,7 +29,10 @@ def send_item_out_for_service(item_id: int, rfid_uid: str):
             item = cur.fetchone()
             
             if not item:
+                print(f"[send_item_out_for_service] Item not found: item_id={item_id}")
                 return None
+            
+            print(f"[send_item_out_for_service] Found item: {dict(item)}")
             
             # Check if already out for service
             cur.execute(
@@ -40,9 +45,11 @@ def send_item_out_for_service(item_id: int, rfid_uid: str):
             existing = cur.fetchone()
             
             if existing:
+                print(f"[send_item_out_for_service] Item already out for service")
                 return {"error": "Item already out for service"}
             
             # Insert service record
+            print(f"[send_item_out_for_service] Inserting service record for rfid_uid={item['rfid_uid']}")
             cur.execute(
                 """
                 INSERT INTO service (rfid_uid)
@@ -52,6 +59,7 @@ def send_item_out_for_service(item_id: int, rfid_uid: str):
                 (item['rfid_uid'],),
             )
             inserted = cur.fetchone()
+            print(f"[send_item_out_for_service] Inserted: {dict(inserted)}")
 
             service_record = {
                 "id": inserted["id"],

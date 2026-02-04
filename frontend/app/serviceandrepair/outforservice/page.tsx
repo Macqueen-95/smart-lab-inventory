@@ -40,7 +40,7 @@ export default function OutForServicePage() {
             }
         }
 
-        const interval = setInterval(pollForScan, 2000)
+        const interval = setInterval(pollForScan, 500)
         pollForScan()
         return () => clearInterval(interval)
     }, [isScanning, scannedRfid])
