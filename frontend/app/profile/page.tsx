@@ -38,7 +38,7 @@ export default function ProfilePage() {
     const loadUserProfile = async () => {
         try {
             const result = await authAPI.getMe()
-            if (result.success) {
+            if (result.success && result.user) {
                 setUser(result.user)
                 setName(result.user.name || "")
                 setProfilePictureUrl(result.user.profile_picture_url || "")

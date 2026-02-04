@@ -42,6 +42,10 @@ export interface AuthResponse {
   user?: {
     name: string
     userid: string
+    profile_picture_url?: string
+    user_rfid_uid?: string
+    id?: number
+    created_at?: string
   }
 }
 
