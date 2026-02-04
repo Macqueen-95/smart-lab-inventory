@@ -182,6 +182,21 @@ export const floorPlansAPI = {
   },
 }
 
+export const adminFloorPlansAPI = {
+  listByUser: async (userid: string): Promise<{ success: boolean; floor_plans: FloorPlan[] }> => {
+    const res = await api.get<{ success: boolean; floor_plans: FloorPlan[] }>("/admin/floor-plans", {
+      params: { userid },
+    })
+    return res.data
+  },
+  listRoomsByUserPlan: async (userid: string, planId: number): Promise<{ success: boolean; rooms: Room[] }> => {
+    const res = await api.get<{ success: boolean; rooms: Room[] }>(`/admin/floor-plans/${planId}/rooms`, {
+      params: { userid },
+    })
+    return res.data
+  },
+}
+
 export const roomsAPI = {
   list: async (): Promise<{ success: boolean; rooms: Room[] }> => {
     const res = await api.get<{ success: boolean; rooms: Room[] }>("/rooms")

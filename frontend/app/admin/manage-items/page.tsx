@@ -155,7 +155,7 @@ export default function ManageItemsPage() {
         }
 
         // Poll every 2 seconds
-        const interval = setInterval(pollForScan, 2000)
+        const interval = setInterval(pollForScan, 100)
         // Also check immediately
         pollForScan()
 

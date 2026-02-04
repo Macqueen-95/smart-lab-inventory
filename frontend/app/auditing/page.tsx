@@ -38,9 +38,20 @@ export default function AuditingPage() {
     const [currentMonth, setCurrentMonth] = useState<Date>(new Date())
     const [auditsForDate, setAuditsForDate] = useState<any[]>([])
     const [pendingAudits, setPendingAudits] = useState<any[]>([])
+    const [monthAudits, setMonthAudits] = useState<any[]>([])
     const [isAdmin, setIsAdmin] = useState(false)
 
     const days = useMemo(() => buildCalendarDays(currentMonth), [currentMonth])
+
+    // Map of dates that have audits
+    const auditDateMap = useMemo(() => {
+        const map = new Map<string, number>()
+        monthAudits.forEach(audit => {
+            const count = map.get(audit.scheduled_date) || 0
+            map.set(audit.scheduled_date, count + 1)
+        })
+        return map
+    }, [monthAudits])
 
     const loadAudits = async (date: string) => {
         const result = await auditingAPI.list(date)
@@ -54,12 +65,28 @@ export default function AuditingPage() {
         }
     }
 
+    const loadMonthAudits = async () => {
+        // Load all audits - backend filters by user if not admin
+        const result = await auditingAPI.list()
+        if (result.success) {
+            // Filter audits that fall within the current month
+            const year = currentMonth.getFullYear()
+            const month = currentMonth.getMonth()
+            const filtered = result.audits.filter((audit: any) => {
+                const auditDate = new Date(audit.scheduled_date)
+                return auditDate.getFullYear() === year && auditDate.getMonth() === month
+            })
+            setMonthAudits(filtered)
+        }
+    }
+
     useEffect(() => {
         const init = async () => {
             const me = await authAPI.getMe()
             setIsAdmin(me.success && me.user?.userid === "admin")
             await loadAudits(selectedDate)
             await loadPending()
+            await loadMonthAudits()
         }
         init()
     }, [])
@@ -67,6 +94,10 @@ export default function AuditingPage() {
     useEffect(() => {
         loadAudits(selectedDate)
     }, [selectedDate])
+
+    useEffect(() => {
+        loadMonthAudits()
+    }, [currentMonth])
 
     const handleSelectDate = (date: Date | null) => {
         if (!date) return
@@ -114,18 +145,33 @@ export default function AuditingPage() {
                         <div className="grid grid-cols-7 gap-2">
                             {days.map((day, idx) => {
                                 const isSelected = day ? formatDate(day) === selectedDate : false
+                                const dateStr = day ? formatDate(day) : ""
+                                const auditCount = auditDateMap.get(dateStr) || 0
+                                const hasAudits = auditCount > 0
                                 return (
                                     <button
                                         key={idx}
                                         onClick={() => handleSelectDate(day)}
                                         className={
-                                            "h-12 rounded border text-sm " +
+                                            "h-14 rounded border text-sm relative flex flex-col items-center justify-center " +
                                             (day ? "bg-white hover:bg-zinc-50" : "bg-transparent border-transparent cursor-default") +
-                                            (isSelected ? " border-black text-black" : " border-zinc-200 text-zinc-700")
+                                            (isSelected ? " border-black ring-2 ring-black" : " border-zinc-200") +
+                                            (hasAudits && !isSelected ? " bg-red-50 border-red-300" : "")
                                         }
                                         disabled={!day}
                                     >
-                                        {day ? day.getDate() : ""}
+                                        {day && (
+                                            <>
+                                                <span className={hasAudits ? "text-red-700 font-semibold" : "text-zinc-700"}>
+                                                    {day.getDate()}
+                                                </span>
+                                                {hasAudits && (
+                                                    <span className="text-[10px] text-red-600 font-medium mt-0.5">
+                                                        {auditCount} {auditCount === 1 ? 'audit' : 'audits'}
+                                                    </span>
+                                                )}
+                                            </>
+                                        )}
                                     </button>
                                 )
                             })}

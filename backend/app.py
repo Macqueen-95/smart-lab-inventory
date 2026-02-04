@@ -617,6 +617,44 @@ def list_users_admin():
     return jsonify({"success": True, "users": list_users()}), 200
 
 
+@app.route("/api/admin/floor-plans", methods=["GET"])
+@login_required
+def list_floor_plans_for_user():
+    userid = session.get("user_id")
+    if not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin only"}), 403
+
+    target_userid = request.args.get("userid")
+    if not target_userid:
+        return jsonify({"success": False, "message": "userid is required"}), 400
+
+    target_user_id = get_user_numeric_id(target_userid)
+    if not target_user_id:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    plans = get_floor_plans(target_user_id)
+    return jsonify({"success": True, "floor_plans": plans}), 200
+
+
+@app.route("/api/admin/floor-plans/<int:plan_id>/rooms", methods=["GET"])
+@login_required
+def list_rooms_for_user_plan(plan_id: int):
+    userid = session.get("user_id")
+    if not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin only"}), 403
+
+    target_userid = request.args.get("userid")
+    if not target_userid:
+        return jsonify({"success": False, "message": "userid is required"}), 400
+
+    target_user_id = get_user_numeric_id(target_userid)
+    if not target_user_id:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    rooms = get_rooms_by_floor_plan(plan_id, target_user_id)
+    return jsonify({"success": True, "rooms": rooms}), 200
+
+
 @app.route("/api/audits", methods=["GET"])
 @login_required
 def list_audits_api():

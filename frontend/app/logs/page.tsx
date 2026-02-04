@@ -33,7 +33,7 @@ export default function LogsPage() {
     useEffect(() => {
         loadLogs()
         // Auto-refresh every 10 seconds
-        const interval = setInterval(loadLogs, 10000)
+        const interval = setInterval(loadLogs, 2000)
         return () => clearInterval(interval)
     }, [])
 

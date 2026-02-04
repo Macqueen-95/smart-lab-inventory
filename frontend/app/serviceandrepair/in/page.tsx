@@ -41,7 +41,7 @@ export default function InFromServicePage() {
             }
         }
 
-        const interval = setInterval(pollForScan, 500)
+        const interval = setInterval(pollForScan, 100)
         pollForScan()
         return () => clearInterval(interval)
     }, [isScanning, scannedRfid])

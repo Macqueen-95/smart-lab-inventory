@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { auditingAPI, authAPI, floorPlansAPI, usersAPI } from "@/lib/api"
+import { auditingAPI, authAPI, adminFloorPlansAPI, usersAPI } from "@/lib/api"
 import { ArrowLeft, CalendarCheck, Search, UserPlus } from "lucide-react"
 
 const formatDate = (date: Date) => date.toISOString().slice(0, 10)
@@ -32,9 +32,6 @@ export default function CreateAuditPage() {
             setIsAdmin(admin)
             if (!admin) return
 
-            const plans = await floorPlansAPI.list()
-            if (plans.success) setFloorPlans(plans.floor_plans)
-
             const usersRes = await usersAPI.list()
             if (usersRes.success) setUsers(usersRes.users)
         }
@@ -42,16 +39,32 @@ export default function CreateAuditPage() {
     }, [])
 
     useEffect(() => {
-        const loadRooms = async () => {
-            if (!selectedPlan) {
+        const loadPlans = async () => {
+            if (!selectedUser) {
+                setFloorPlans([])
                 setRooms([])
+                setSelectedPlan("")
+                setSelectedRoom("")
                 return
             }
-            const res = await floorPlansAPI.listRooms(Number(selectedPlan))
+            const res = await adminFloorPlansAPI.listByUser(selectedUser)
+            if (res.success) setFloorPlans(res.floor_plans)
+        }
+        loadPlans()
+    }, [selectedUser])
+
+    useEffect(() => {
+        const loadRooms = async () => {
+            if (!selectedUser || !selectedPlan) {
+                setRooms([])
+                setSelectedRoom("")
+                return
+            }
+            const res = await adminFloorPlansAPI.listRoomsByUserPlan(selectedUser, Number(selectedPlan))
             if (res.success) setRooms(res.rooms)
         }
         loadRooms()
-    }, [selectedPlan])
+    }, [selectedUser, selectedPlan])
 
     const filteredUsers = useMemo(() => {
         if (!search) return users
@@ -160,6 +173,7 @@ export default function CreateAuditPage() {
                             className="w-full border rounded px-3 py-2"
                             value={selectedPlan}
                             onChange={(e) => setSelectedPlan(e.target.value ? Number(e.target.value) : "")}
+                            disabled={!selectedUser}
                         >
                             <option value="">Select a floor plan</option>
                             {floorPlans.map((plan: any) => (
@@ -180,7 +194,7 @@ export default function CreateAuditPage() {
                             className="w-full border rounded px-3 py-2"
                             value={selectedRoom}
                             onChange={(e) => setSelectedRoom(e.target.value ? Number(e.target.value) : "")}
-                            disabled={!selectedPlan}
+                            disabled={!selectedUser || !selectedPlan}
                         >
                             <option value="">Select a room</option>
                             {rooms.map((room: any) => (

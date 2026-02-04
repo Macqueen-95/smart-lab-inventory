@@ -66,7 +66,7 @@ export default function AddRoomPage() {
             }
         }
 
-        const interval = setInterval(pollForScan, 2000)
+        const interval = setInterval(pollForScan, 100)
         pollForScan()
         return () => clearInterval(interval)
     }, [scanningItemIndex, step, scannedRfidUid])
