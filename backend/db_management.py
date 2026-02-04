@@ -64,6 +64,13 @@ def init_tables(conn=None):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
+            
+            # Migration: Ensure out_datetime has DEFAULT (fix for existing tables)
+            cur.execute("""
+                ALTER TABLE service 
+                ALTER COLUMN out_datetime SET DEFAULT CURRENT_TIMESTAMP
+            """)
+            
             conn.commit()
     except Exception as e:
         print(f"db_management init_tables error: {e}")
