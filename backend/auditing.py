@@ -296,7 +296,8 @@ def get_audit_items_status(audit_id):
                 room_ids = [audit["room_id"]]
             elif audit.get("floor_plan_id"):
                 cur.execute("SELECT id FROM rooms WHERE floor_plan_id = %s", (audit["floor_plan_id"],))
-                room_ids = [r[0] for r in cur.fetchall()]
+                rows = cur.fetchall()
+                room_ids = [r["id"] for r in rows] if rows else []
 
             if not room_ids:
                 return {
@@ -310,6 +311,7 @@ def get_audit_items_status(audit_id):
                     },
                 }
 
+            # Get all items in the room(s), including those without RFID
             cur.execute(
                 """
                 SELECT i.id, i.item_name, i.rfid_uid, r.room_name, f.floor_title
@@ -317,14 +319,18 @@ def get_audit_items_status(audit_id):
                 LEFT JOIN rooms r ON i.room_id = r.id
                 LEFT JOIN floor_plans f ON r.floor_plan_id = f.id
                 WHERE i.room_id = ANY(%s)
+                ORDER BY i.created_at
                 """,
                 (room_ids,),
             )
-            expected_items = [dict(r) for r in cur.fetchall()]
-            expected_items = [i for i in expected_items if i.get("rfid_uid")]
+            all_items = [dict(r) for r in cur.fetchall()]
+            
+            # Only items with RFID can be scanned/audited
+            expected_items = [i for i in all_items if i.get("rfid_uid")]
+            items_without_rfid = [i for i in all_items if not i.get("rfid_uid")]
 
-            cur.execute("SELECT rfid_uid FROM service")
-            in_service_set = {r[0] for r in cur.fetchall()}
+            cur.execute("SELECT rfid_uid FROM service WHERE rfid_uid IS NOT NULL")
+            in_service_set = {r["rfid_uid"] for r in cur.fetchall()}
 
             scanned_set = set()
             if audit.get("scanner_id") and audit.get("started_at"):
@@ -332,17 +338,18 @@ def get_audit_items_status(audit_id):
                     """
                     SELECT DISTINCT rfid_uid
                     FROM rfid_scan_logs
-                    WHERE scanner_id = %s AND scanned_at >= %s
+                    WHERE scanner_id = %s AND scanned_at >= %s AND rfid_uid IS NOT NULL
                     """,
                     (audit["scanner_id"], audit["started_at"]),
                 )
-                scanned_set = {r[0] for r in cur.fetchall() if r[0]}
+                scanned_set = {r["rfid_uid"] for r in cur.fetchall()}
 
             items = []
             missing = 0
             in_service = 0
             scanned = 0
 
+            # Process items with RFID
             for item in expected_items:
                 uid = item.get("rfid_uid")
                 if uid in scanned_set:
@@ -355,12 +362,17 @@ def get_audit_items_status(audit_id):
                     status = "MISSING"
                     missing += 1
                 items.append({**item, "status": status})
+            
+            # Add items without RFID with NO_RFID status
+            for item in items_without_rfid:
+                items.append({**item, "status": "NO_RFID"})
 
             summary = {
                 "total_expected": len(expected_items),
                 "scanned": scanned,
                 "missing": missing,
                 "in_service": in_service,
+                "no_rfid": len(items_without_rfid),
             }
 
             return {
@@ -370,6 +382,8 @@ def get_audit_items_status(audit_id):
             }
     except Exception as e:
         print(f"get_audit_items_status error: {e}")
+        import traceback
+        traceback.print_exc()
         return None
     finally:
         conn.close()
