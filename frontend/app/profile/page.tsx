@@ -83,6 +83,8 @@ export default function ProfilePage() {
             if (result.success) {
                 setMessage({ type: "success", text: "Profile updated successfully!" })
                 setUser(result.user)
+                // Trigger sidebar refresh
+                window.dispatchEvent(new Event('authChange'))
             } else {
                 setMessage({ type: "error", text: result.message || "Failed to update profile" })
             }
