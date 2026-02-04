@@ -259,15 +259,21 @@ def create_inventory_item(room_id: int, item_name: str, item_icon_url: str = Non
 
 
 def get_inventory_items_by_room(room_id: int):
-    """List all inventory items for a room."""
+    """List all inventory items for a room with last scan timestamp."""
     conn = get_db_connection()
     if not conn:
         return []
     try:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                """SELECT id, item_name, item_icon_url, rfid_uid, room_id, created_at
-                   FROM inventory_items WHERE room_id = %s ORDER BY id""",
+                """SELECT 
+                    i.id, i.item_name, i.item_icon_url, i.rfid_uid, i.room_id, i.created_at,
+                    (SELECT scanned_at FROM rfid_scan_logs 
+                     WHERE rfid_uid = i.rfid_uid 
+                     ORDER BY scanned_at DESC LIMIT 1) as last_scanned_at
+                   FROM inventory_items i
+                   WHERE i.room_id = %s 
+                   ORDER BY i.id""",
                 (room_id,),
             )
             return [dict(r) for r in cur.fetchall()]

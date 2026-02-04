@@ -176,28 +176,61 @@ export default function InventoryPage() {
                             ) : modalItems.length === 0 ? (
                                 <p className="text-center text-zinc-500">No items in this room</p>
                             ) : (
-                                <div className="space-y-3">
+                                <div className="space-y-2">
                                     {modalItems.map((item) => (
                                         <div
                                             key={item.id}
-                                            className="p-4 border rounded-lg hover:bg-zinc-50 transition-colors"
+                                            className="flex items-center gap-3 p-3 border rounded-lg hover:bg-zinc-50 transition-colors"
                                         >
-                                            <div className="flex items-start justify-between">
-                                                <div className="flex-1">
-                                                    <h4 className="font-medium text-black">{item.item_name}</h4>
-                                                    <div className="flex items-center gap-3 mt-2 text-xs text-zinc-500">
-                                                        <span className="text-zinc-600">ID: {item.id}</span>
-                                                    </div>
-                                                </div>
+                                            {/* Item Icon */}
+                                            <div className="w-12 h-12 rounded bg-zinc-100 flex items-center justify-center flex-shrink-0">
+                                                {item.item_icon_url ? (
+                                                    <img
+                                                        src={item.item_icon_url}
+                                                        alt=""
+                                                        className="w-full h-full object-contain p-1"
+                                                    />
+                                                ) : (
+                                                    <Package className="h-6 w-6 text-zinc-400" />
+                                                )}
                                             </div>
-                                            {item.rfid_uid && (
-                                                <div className="flex items-center gap-2 mt-3 p-2 bg-blue-50 rounded">
-                                                    <Wifi className="h-3 w-3 text-blue-600" />
-                                                    <code className="text-xs font-mono text-blue-700">
-                                                        {item.rfid_uid}
-                                                    </code>
-                                                </div>
-                                            )}
+                                            
+                                            {/* Item Details */}
+                                            <div className="flex-1 min-w-0">
+                                                <h4 className="font-medium text-black truncate">{item.item_name}</h4>
+                                                {item.rfid_uid ? (
+                                                    <div className="flex items-center gap-1 text-xs text-blue-600 mt-0.5">
+                                                        <Wifi className="h-3 w-3" />
+                                                        <code className="font-mono">{item.rfid_uid}</code>
+                                                    </div>
+                                                ) : (
+                                                    <p className="text-xs text-zinc-500 mt-0.5">No RFID assigned</p>
+                                                )}
+                                            </div>
+                                            
+                                            {/* Last Scanned */}
+                                            <div className="text-right flex-shrink-0">
+                                                {item.last_scanned_at ? (
+                                                    <>
+                                                        <p className="text-xs text-zinc-500">Last scanned</p>
+                                                        <p className="text-xs font-medium text-black">
+                                                            {new Date(item.last_scanned_at).toLocaleDateString('en-US', {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                year: 'numeric'
+                                                            })}
+                                                        </p>
+                                                        <p className="text-xs text-zinc-400">
+                                                            {new Date(item.last_scanned_at).toLocaleTimeString('en-US', {
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })}
+                                                        </p>
+                                                    </>
+                                                ) : (
+                                                    <p className="text-xs text-zinc-400">Never scanned</p>
+                                                )}
+                                            </div>
                                         </div>
                                     ))}
                                 </div>

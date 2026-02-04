@@ -124,6 +124,7 @@ export interface InventoryItem {
   rfid_uid?: string | null
   room_id: number
   created_at: string
+  last_scanned_at?: string | null
 }
 
 export const floorPlansAPI = {
