@@ -41,7 +41,19 @@ export default function LoginPage() {
     }
 
     return (
-        <Card className="w-full max-w-md shadow-xl">
+        <div className="min-h-screen flex items-center justify-center p-4 relative">
+            {/* Background Image */}
+            <div 
+                className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                style={{ 
+                    backgroundImage: 'url(/login.png)',
+                    opacity: 0.3
+                }}
+            />
+            {/* Overlay for additional dimming */}
+            <div className="absolute inset-0 bg-black/20" />
+            
+            <Card className="w-full max-w-md shadow-xl relative z-10">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
                         <div className="p-3 bg-blue-100 rounded-full">
@@ -107,5 +119,6 @@ export default function LoginPage() {
                     </form>
                 </CardContent>
             </Card>
+        </div>
     )
 }

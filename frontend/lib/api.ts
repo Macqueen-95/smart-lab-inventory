@@ -250,6 +250,19 @@ export const itemsAPI = {
     )
     return res.data
   },
+  updateName: async (itemId: number, roomId: number, item_name: string) => {
+    const res = await api.patch<{ success: boolean; item?: InventoryItem }>(
+      `/items/${itemId}/name`,
+      { room_id: roomId, item_name }
+    )
+    return res.data
+  },
+  deleteItem: async (itemId: number, roomId: number) => {
+    const res = await api.delete<{ success: boolean; message?: string }>(
+      `/items/${itemId}?room_id=${roomId}`
+    )
+    return res.data
+  },
 }
 
 // ---- RFID Management ----
@@ -376,6 +389,66 @@ export const auditingAPI = {
   },
   items: async (auditId: number): Promise<{ success: boolean; items?: any[]; summary?: any; audit?: any; message?: string }> => {
     const res = await api.get<{ success: boolean; items?: any[]; summary?: any; audit?: any; message?: string }>(`/audits/${auditId}/items`)
+    return res.data
+  },
+}
+
+export const lendBorrowAPI = {
+  lendOut: async (rfid_uid: string, user_rfid_uid?: string) => {
+    const res = await api.post<{ success: boolean; message?: string; lend_record?: any; item?: any }>(
+      "/lend-borrow/out",
+      { rfid_uid, user_rfid_uid }
+    )
+    return res.data
+  },
+  returnIn: async (rfid_uid: string) => {
+    const res = await api.post<{ success: boolean; message?: string }>("/lend-borrow/in", { rfid_uid })
+    return res.data
+  },
+  getActive: async () => {
+    const res = await api.get<{ success: boolean; items: any[] }>("/lend-borrow/active")
+    return res.data
+  },
+  getHistory: async () => {
+    const res = await api.get<{ success: boolean; history: any[] }>("/lend-borrow/history")
+    return res.data
+  },
+}
+
+export const profileAPI = {
+  update: async (data: { name?: string; profile_picture_url?: string }) => {
+    const res = await api.patch<{ success: boolean; user?: any; message?: string }>("/user/profile", data)
+    return res.data
+  },
+  changePassword: async (current_password: string, new_password: string) => {
+    const res = await api.post<{ success: boolean; message?: string }>("/user/change-password", {
+      current_password,
+      new_password,
+    })
+    return res.data
+  },
+  assignRfid: async (user_rfid_uid: string) => {
+    const res = await api.post<{ success: boolean; user?: any; message?: string }>("/user/assign-rfid", {
+      user_rfid_uid,
+    })
+    return res.data
+  },
+}
+
+export const adminAPI = {
+  swapRfid: async (old_rfid_uid: string, new_rfid_uid: string) => {
+    const res = await api.post<{ success: boolean; message?: string; item?: any; old_rfid?: string; new_rfid?: string }>(
+      "/rfid/swap",
+      { old_rfid_uid, new_rfid_uid }
+    )
+    return res.data
+  },
+  deleteFloorPlan: async (planId: number) => {
+    const res = await api.delete<{ success: boolean; message?: string }>(`/floor-plans/${planId}`)
+    return res.data
+  },
+  deleteRoom: async (roomId: number) => {
+    const res = await api.delete<{ success: boolean; message?: string }>(`/rooms/${roomId}`)
     return res.data
   },
 }

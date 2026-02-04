@@ -6,8 +6,8 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { ArrowLeft, Plus, X, Wifi, CheckCircle2, AlertCircle, Package } from "lucide-react"
-import { floorPlansAPI, roomsAPI, itemsAPI, rfidAPI, type FloorPlan, type InventoryItem } from "@/lib/api"
+import { ArrowLeft, Plus, X, Wifi, CheckCircle2, AlertCircle, Package, Upload } from "lucide-react"
+import { floorPlansAPI, roomsAPI, itemsAPI, rfidAPI, uploadToBlob, type FloorPlan, type InventoryItem } from "@/lib/api"
 
 export default function AddRoomPage() {
     const router = useRouter()
@@ -25,6 +25,8 @@ export default function AddRoomPage() {
     const [scannedRfidUid, setScannedRfidUid] = useState("")
     const [itemName, setItemName] = useState("")
     const [itemIcon, setItemIcon] = useState<string | null>(null)
+    const [itemQuantity, setItemQuantity] = useState(1)
+    const [iconFile, setIconFile] = useState<File | null>(null)
     
     // Loading states
     const [isLoading, setIsLoading] = useState(true)
@@ -90,7 +92,19 @@ export default function AddRoomPage() {
         setItemName("")
     }
 
-    const handleAddItem = () => {
+    const handleUploadIcon = async () => {
+        const input = document.createElement("input")
+        input.type = "file"
+        input.accept = "image/*"
+        input.onchange = async (e) => {
+            const file = (e.target as HTMLInputElement).files?.[0]
+            if (!file) return
+            setIconFile(file)
+        }
+        input.click()
+    }
+
+    const handleAddItem = async () => {
         if (!itemName.trim()) {
             setError("Please enter an item name")
             return
@@ -100,17 +114,32 @@ export default function AddRoomPage() {
             return
         }
 
+        let uploadedIconUrl: string | undefined
+        if (iconFile) {
+            try {
+                uploadedIconUrl = await uploadToBlob(iconFile, "icon")
+            } catch (err) {
+                setError("Failed to upload icon")
+                return
+            }
+        }
+
         const newItem: any = {
             name: itemName,
             description: "",
             rfid_uid: scannedRfidUid,
             type: "Equipment",
             status: "Active",
+            quantity: itemQuantity,
+            icon_url: uploadedIconUrl,
         }
 
         setItems([...items, newItem])
         setScannedRfidUid("")
         setItemName("")
+        setItemQuantity(1)
+        setItemIcon(null)
+        setIconFile(null)
         setError(null)
     }
 
@@ -153,7 +182,8 @@ export default function AddRoomPage() {
             for (const item of items) {
                 const itemRes = await itemsAPI.create(roomId, {
                     item_name: item.name,
-                    item_quantity: 1,
+                    item_quantity: item.quantity || 1,
+                    item_icon_url: item.icon_url,
                 })
 
                 if (itemRes.success && itemRes.item?.id && item.rfid_uid) {
@@ -299,13 +329,59 @@ export default function AddRoomPage() {
                                     />
                                 </div>
 
+                                <div className="space-y-2">
+                                    <label htmlFor="item-quantity" className="text-sm font-medium text-black">
+                                        Quantity
+                                    </label>
+                                    <Input
+                                        id="item-quantity"
+                                        type="number"
+                                        min="1"
+                                        value={itemQuantity}
+                                        onChange={(e) => setItemQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                        className="bg-white text-black"
+                                    />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium text-black">Item Icon</label>
+                                    <div className="flex items-center gap-2">
+                                        {iconFile ? (
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-sm text-zinc-600">{iconFile.name}</span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        setIconFile(null)
+                                                        setItemIcon(null)
+                                                    }}
+                                                    className="text-red-600 hover:text-red-700"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                onClick={handleUploadIcon}
+                                                className="gap-2"
+                                            >
+                                                <Upload className="h-4 w-4" />
+                                                Upload Icon
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+
                                 <Button
                                     type="button"
                                     onClick={handleAddItem}
+                                    disabled={isSaving}
                                     className="w-full bg-blue-600 hover:bg-blue-700"
                                 >
                                     <Plus className="h-4 w-4 mr-2" />
-                                    Add Item to Room
+                                    {isSaving ? "Adding..." : "Add Item to Room"}
                                 </Button>
                             </CardContent>
                         </Card>
@@ -328,6 +404,7 @@ export default function AddRoomPage() {
                                             >
                                                 <div className="flex-1">
                                                     <p className="font-medium text-black">{item.name}</p>
+                                                    {item.quantity > 1 && <p className="text-xs text-zinc-600">Qty: {item.quantity}</p>}
                                                     <p className="text-xs text-zinc-600 font-mono">{item.rfid_uid}</p>
                                                 </div>
                                                 <Button

@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
-import { ArrowLeft, Plus, Search, X, Save, Upload, Package, Wifi } from "lucide-react"
+import { ArrowLeft, Plus, Search, X, Save, Upload, Package, Wifi, Edit2, Trash2, Check } from "lucide-react"
 import { roomsAPI, itemsAPI, uploadToBlob, rfidAPI, type Room, type InventoryItem } from "@/lib/api"
 
 export default function ManageItemsPage() {
@@ -22,6 +22,9 @@ export default function ManageItemsPage() {
     const [scanningItemId, setScanningItemId] = useState<number | null>(null)
     const [scannedRfidUid, setScannedRfidUid] = useState<string>("")
     const [rfidScanListening, setRfidScanListening] = useState(false)
+    const [editingItemId, setEditingItemId] = useState<number | null>(null)
+    const [editingItemName, setEditingItemName] = useState("")
+    const [deletingItemId, setDeletingItemId] = useState<number | null>(null)
 
     useEffect(() => {
         let cancelled = false
@@ -193,6 +196,50 @@ export default function ManageItemsPage() {
         }
     }
 
+    const handleStartEdit = (item: InventoryItem) => {
+        setEditingItemId(item.id)
+        setEditingItemName(item.item_name)
+    }
+
+    const handleSaveEdit = async () => {
+        if (!editingItemId || !editingItemName.trim() || !selectedRoomId) return
+        setSaving(true)
+        setError(null)
+        try {
+            const res = await itemsAPI.updateName(editingItemId, selectedRoomId, editingItemName.trim())
+            if (res.success) {
+                setItems((prev) => prev.map((i) => (i.id === editingItemId ? { ...i, item_name: editingItemName.trim() } : i)))
+                setEditingItemId(null)
+                setEditingItemName("")
+            } else {
+                setError("Failed to update item name")
+            }
+        } catch (e) {
+            setError("Failed to update item name")
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    const handleDeleteItem = async (itemId: number) => {
+        if (!selectedRoomId) return
+        setSaving(true)
+        setError(null)
+        try {
+            const res = await itemsAPI.deleteItem(itemId, selectedRoomId)
+            if (res.success) {
+                setItems((prev) => prev.filter((i) => i.id !== itemId))
+                setDeletingItemId(null)
+            } else {
+                setError("Failed to delete item")
+            }
+        } catch (e) {
+            setError("Failed to delete item")
+        } finally {
+            setSaving(false)
+        }
+    }
+
     return (
         <div className="flex flex-col h-full space-y-6">
             <div className="flex items-center gap-4">
@@ -320,6 +367,32 @@ export default function ManageItemsPage() {
                         </Card>
                     )}
 
+                    {deletingItemId && (
+                        <Card className="border-red-500 bg-red-50">
+                            <CardHeader>
+                                <CardTitle>Confirm Delete</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <p className="text-sm text-zinc-700">
+                                    Are you sure you want to delete this item? This action cannot be undone.
+                                </p>
+                                <div className="flex gap-2">
+                                    <Button
+                                        onClick={() => handleDeleteItem(deletingItemId)}
+                                        disabled={saving}
+                                        className="bg-red-600 hover:bg-red-700"
+                                    >
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        {saving ? "Deleting..." : "Delete"}
+                                    </Button>
+                                    <Button variant="outline" onClick={() => setDeletingItemId(null)}>
+                                        Cancel
+                                    </Button>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
                     {scanningItemId && (
                         <Card className="border-green-500">
                             <CardHeader>
@@ -375,7 +448,38 @@ export default function ManageItemsPage() {
                                         )}
                                     </div>
                                     <CardHeader>
-                                        <CardTitle className="line-clamp-1">{item.item_name}</CardTitle>
+                                        {editingItemId === item.id ? (
+                                            <div className="flex gap-2">
+                                                <Input
+                                                    value={editingItemName}
+                                                    onChange={(e) => setEditingItemName(e.target.value)}
+                                                    className="flex-1"
+                                                />
+                                                <Button size="icon" variant="ghost" onClick={handleSaveEdit}>
+                                                    <Check className="h-4 w-4" />
+                                                </Button>
+                                                <Button size="icon" variant="ghost" onClick={() => setEditingItemId(null)}>
+                                                    <X className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-between">
+                                                <CardTitle className="line-clamp-1">{item.item_name}</CardTitle>
+                                                <div className="flex gap-1">
+                                                    <Button size="icon" variant="ghost" onClick={() => handleStartEdit(item)}>
+                                                        <Edit2 className="h-3 w-3" />
+                                                    </Button>
+                                                    <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        onClick={() => setDeletingItemId(item.id)}
+                                                        className="text-red-600 hover:text-red-700"
+                                                    >
+                                                        <Trash2 className="h-3 w-3" />
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        )}
                                         {item.rfid_uid && (
                                             <p className="text-xs text-green-600 font-mono mt-2">
                                                 RFID: {item.rfid_uid}

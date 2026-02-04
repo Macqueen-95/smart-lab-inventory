@@ -31,6 +31,13 @@ from serviceandrepair import (
     get_all_service_history,
     get_item_by_rfid_for_service,
 )
+from lendborrow import (
+    lend_item,
+    return_item,
+    get_items_lent_out,
+    get_lend_borrow_history,
+    get_user_by_rfid,
+)
 from auditing import (
     create_audit,
     list_audits,
@@ -367,8 +374,6 @@ def api_update_item_icon(item_id):
     return jsonify({"success": True, "item": item}), 200
 
 
-# ---- RFID Management ----
-
 @app.route("/api/items/<int:item_id>/assign-rfid", methods=["POST"])
 @login_required
 def api_assign_rfid_to_item(item_id):
@@ -391,7 +396,95 @@ def api_assign_rfid_to_item(item_id):
         return jsonify(result), 400
 
 
-@app.route("/api/rfid/scan", methods=["POST"])
+@app.route("/api/items/<int:item_id>/name", methods=["PATCH"])
+@login_required
+def api_update_item_name(item_id):
+    """Update an item's name. Body: item_name, room_id."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    data = request.get_json() or {}
+    item_name = (data.get("item_name") or "").strip()
+    
+    if not item_name:
+        return jsonify({"success": False, "message": "item_name is required"}), 400
+    
+    from auth import get_db_connection
+    from psycopg.rows import dict_row
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """
+                UPDATE inventory_items
+                SET item_name = %s
+                WHERE id = %s AND room_id IN (
+                    SELECT r.id FROM rooms r
+                    JOIN floor_plans f ON r.floor_plan_id = f.id
+                    WHERE f.user_id = %s
+                )
+                RETURNING id, item_name, item_icon_url, rfid_uid, room_id, created_at
+                """,
+                (item_name, item_id, uid)
+            )
+            item = cur.fetchone()
+            if not item:
+                return jsonify({"success": False, "message": "Item not found or access denied"}), 404
+            conn.commit()
+            return jsonify({"success": True, "item": dict(item)}), 200
+    except Exception as e:
+        print(f"Error updating item name: {e}")
+        conn.rollback()
+        return jsonify({"success": False, "message": "Failed to update item"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/items/<int:item_id>", methods=["DELETE"])
+@login_required
+def api_delete_item(item_id):
+    """Delete an inventory item."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    from auth import get_db_connection
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM inventory_items
+                WHERE id = %s AND room_id IN (
+                    SELECT r.id FROM rooms r
+                    JOIN floor_plans f ON r.floor_plan_id = f.id
+                    WHERE f.user_id = %s
+                )
+                """,
+                (item_id, uid)
+            )
+            if cur.rowcount == 0:
+                return jsonify({"success": False, "message": "Item not found or access denied"}), 404
+            conn.commit()
+            return jsonify({"success": True, "message": "Item deleted"}), 200
+    except Exception as e:
+        print(f"Error deleting item: {e}")
+        conn.rollback()
+        return jsonify({"success": False, "message": "Failed to delete item"}), 500
+    finally:
+        conn.close()
+
+
+# ---- RFID Management ----
 def api_process_rfid_scan():
     """
     Process an RFID scan from a scanner device.
@@ -791,6 +884,326 @@ def audit_items_api(audit_id: int):
     if items_status:
         return jsonify({"success": True, **items_status}), 200
     return jsonify({"success": False, "message": "Failed to load audit items"}), 500
+
+
+# ---- Lend/Borrow Management ----
+
+@app.route("/api/lend-borrow/out", methods=["POST"])
+@login_required
+def lend_item_out():
+    """Lend an item out. Body: rfid_uid, user_rfid_uid (optional)."""
+    userid = session.get("user_id")
+    data = request.get_json() or {}
+    rfid_uid = (data.get("rfid_uid") or "").strip()
+    user_rfid_uid = (data.get("user_rfid_uid") or "").strip()
+    
+    if not rfid_uid:
+        return jsonify({"success": False, "message": "rfid_uid is required"}), 400
+    
+    result = lend_item(rfid_uid, user_rfid_uid=user_rfid_uid or None, userid=userid)
+    return jsonify(result), 200 if result.get("success") else 400
+
+
+@app.route("/api/lend-borrow/in", methods=["POST"])
+@login_required
+def return_item_in():
+    """Return a lent item. Body: rfid_uid."""
+    data = request.get_json() or {}
+    rfid_uid = (data.get("rfid_uid") or "").strip()
+    
+    if not rfid_uid:
+        return jsonify({"success": False, "message": "rfid_uid is required"}), 400
+    
+    result = return_item(rfid_uid)
+    return jsonify(result), 200 if result.get("success") else 400
+
+
+@app.route("/api/lend-borrow/active", methods=["GET"])
+@login_required
+def get_active_lent_items():
+    """Get all items currently lent out."""
+    items = get_items_lent_out()
+    return jsonify({"success": True, "items": items}), 200
+
+
+@app.route("/api/lend-borrow/history", methods=["GET"])
+@login_required
+def get_lend_history():
+    """Get all lend/borrow history."""
+    history = get_lend_borrow_history()
+    return jsonify({"success": True, "history": history}), 200
+
+
+@app.route("/api/user/profile", methods=["PATCH"])
+@login_required
+def update_user_profile():
+    """Update user profile. Body: name, profile_picture_url."""
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    profile_picture_url = data.get("profile_picture_url")
+    
+    from auth import get_db_connection
+    from psycopg.rows import dict_row
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            updates = []
+            params = []
+            
+            if name:
+                updates.append("name = %s")
+                params.append(name)
+            
+            if profile_picture_url is not None:
+                updates.append("profile_picture_url = %s")
+                params.append(profile_picture_url)
+            
+            if not updates:
+                return jsonify({"success": False, "message": "No updates provided"}), 400
+            
+            params.append(userid)
+            query = f"UPDATE users SET {', '.join(updates)} WHERE userid = %s RETURNING id, userid, name, profile_picture_url, user_rfid_uid, created_at"
+            
+            cur.execute(query, params)
+            user = cur.fetchone()
+            conn.commit()
+            
+            if user:
+                return jsonify({"success": True, "user": dict(user)}), 200
+            return jsonify({"success": False, "message": "User not found"}), 404
+    except Exception as e:
+        print(f"Error updating profile: {e}")
+        conn.rollback()
+        return jsonify({"success": False, "message": "Failed to update profile"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/user/change-password", methods=["POST"])
+@login_required
+def change_password():
+    """Change user password. Body: current_password, new_password."""
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    data = request.get_json() or {}
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+    
+    if not current_password or not new_password:
+        return jsonify({"success": False, "message": "Both current and new passwords are required"}), 400
+    
+    from auth import get_db_connection, hash_password, verify_password
+    from psycopg.rows import dict_row
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("SELECT password FROM users WHERE userid = %s", (userid,))
+            user = cur.fetchone()
+            
+            if not user:
+                return jsonify({"success": False, "message": "User not found"}), 404
+            
+            if not verify_password(current_password, user["password"]):
+                return jsonify({"success": False, "message": "Current password is incorrect"}), 400
+            
+            new_hash = hash_password(new_password)
+            cur.execute("UPDATE users SET password = %s WHERE userid = %s", (new_hash, userid))
+            conn.commit()
+            
+            return jsonify({"success": True, "message": "Password changed successfully"}), 200
+    except Exception as e:
+        print(f"Error changing password: {e}")
+        conn.rollback()
+        return jsonify({"success": False, "message": "Failed to change password"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/user/assign-rfid", methods=["POST"])
+@login_required
+def assign_user_rfid():
+    """Assign RFID tag to user. Body: user_rfid_uid."""
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    data = request.get_json() or {}
+    user_rfid_uid = (data.get("user_rfid_uid") or "").strip()
+    
+    if not user_rfid_uid:
+        return jsonify({"success": False, "message": "user_rfid_uid is required"}), 400
+    
+    from auth import get_db_connection
+    from psycopg.rows import dict_row
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "UPDATE users SET user_rfid_uid = %s WHERE userid = %s RETURNING id, userid, name, profile_picture_url, user_rfid_uid",
+                (user_rfid_uid, userid)
+            )
+            user = cur.fetchone()
+            conn.commit()
+            
+            if user:
+                return jsonify({"success": True, "user": dict(user)}), 200
+            return jsonify({"success": False, "message": "User not found"}), 404
+    except Exception as e:
+        print(f"Error assigning RFID: {e}")
+        conn.rollback()
+        if "unique" in str(e).lower():
+            return jsonify({"success": False, "message": "This RFID is already assigned to another user"}), 400
+        return jsonify({"success": False, "message": "Failed to assign RFID"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/rfid/swap", methods=["POST"])
+@login_required
+def swap_rfid_uids():
+    """Swap RFID from old to new item. Body: old_rfid_uid, new_rfid_uid."""
+    userid = session.get("user_id")
+    if not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin only"}), 403
+    
+    data = request.get_json() or {}
+    old_rfid = (data.get("old_rfid_uid") or "").strip()
+    new_rfid = (data.get("new_rfid_uid") or "").strip()
+    
+    if not old_rfid or not new_rfid:
+        return jsonify({"success": False, "message": "Both old_rfid_uid and new_rfid_uid are required"}), 400
+    
+    from auth import get_db_connection
+    from psycopg.rows import dict_row
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            # Find item with old RFID
+            cur.execute("SELECT * FROM inventory_items WHERE rfid_uid = %s", (old_rfid,))
+            item = cur.fetchone()
+            
+            if not item:
+                return jsonify({"success": False, "message": "Item with old RFID not found"}), 404
+            
+            # Update to new RFID
+            cur.execute(
+                "UPDATE inventory_items SET rfid_uid = %s WHERE rfid_uid = %s RETURNING id, item_name, rfid_uid, room_id",
+                (new_rfid, old_rfid)
+            )
+            updated_item = cur.fetchone()
+            
+            # Log the swap in scan logs
+            cur.execute(
+                "INSERT INTO rfid_scan_logs (rfid_uid, scanner_id, scan_status) VALUES (%s, %s, %s)",
+                (new_rfid, "ADMIN_SWAP", f"SWAPPED_FROM_{old_rfid}")
+            )
+            
+            conn.commit()
+            
+            return jsonify({
+                "success": True,
+                "message": "RFID swapped successfully",
+                "item": dict(updated_item),
+                "old_rfid": old_rfid,
+                "new_rfid": new_rfid
+            }), 200
+    except Exception as e:
+        print(f"Error swapping RFID: {e}")
+        conn.rollback()
+        return jsonify({"success": False, "message": "Failed to swap RFID"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/floor-plans/<int:plan_id>", methods=["DELETE"])
+@login_required
+def delete_floor_plan(plan_id: int):
+    """Delete a floor plan and all associated rooms/items."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    from auth import get_db_connection
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM floor_plans WHERE id = %s AND user_id = %s",
+                (plan_id, uid)
+            )
+            if cur.rowcount == 0:
+                return jsonify({"success": False, "message": "Floor plan not found or access denied"}), 404
+            conn.commit()
+            return jsonify({"success": True, "message": "Floor plan deleted"}), 200
+    except Exception as e:
+        print(f"Error deleting floor plan: {e}")
+        conn.rollback()
+        return jsonify({"success": False, "message": "Failed to delete floor plan"}), 500
+    finally:
+        conn.close()
+
+
+@app.route("/api/rooms/<int:room_id>", methods=["DELETE"])
+@login_required
+def delete_room(room_id: int):
+    """Delete a room and all associated items."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    from auth import get_db_connection
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                DELETE FROM rooms
+                WHERE id = %s AND floor_plan_id IN (
+                    SELECT id FROM floor_plans WHERE user_id = %s
+                )
+                """,
+                (room_id, uid)
+            )
+            if cur.rowcount == 0:
+                return jsonify({"success": False, "message": "Room not found or access denied"}), 404
+            conn.commit()
+            return jsonify({"success": True, "message": "Room deleted"}), 200
+    except Exception as e:
+        print(f"Error deleting room: {e}")
+        conn.rollback()
+        return jsonify({"success": False, "message": "Failed to delete room"}), 500
+    finally:
+        conn.close()
 
 
 if __name__ == "__main__":
