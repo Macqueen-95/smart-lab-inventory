@@ -434,7 +434,7 @@ def api_get_latest_unassigned_rfid():
 @login_required
 def send_out_for_service():
     """Send an item out for service."""
-    uid = get_user_numeric_id(session.get("userid"))
+    uid = session.get("user_id")
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
@@ -463,7 +463,7 @@ def send_out_for_service():
 @login_required
 def receive_from_service():
     """Mark an item as returned from service."""
-    uid = get_user_numeric_id(session.get("userid"))
+    uid = session.get("user_id")
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
@@ -490,7 +490,7 @@ def receive_from_service():
 @login_required
 def list_items_out_for_service():
     """Get all items currently out for service."""
-    uid = get_user_numeric_id(session.get("userid"))
+    uid = session.get("user_id")
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
@@ -502,7 +502,7 @@ def list_items_out_for_service():
 @login_required
 def list_service_history():
     """Get all service history."""
-    uid = get_user_numeric_id(session.get("userid"))
+    uid = session.get("user_id")
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
@@ -514,7 +514,7 @@ def list_service_history():
 @login_required
 def get_item_for_service(rfid_uid):
     """Get item details by RFID for service operations."""
-    uid = get_user_numeric_id(session.get("userid"))
+    uid = session.get("user_id")
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
