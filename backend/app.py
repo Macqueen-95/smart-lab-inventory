@@ -392,7 +392,7 @@ def api_get_rfid_scan_logs():
     return jsonify({"success": True, "logs": logs}), 200
 
 
-
+if __name__ == "__main__":
     print("=" * 50)
     print("App starting...")
     
@@ -414,5 +414,4 @@ def api_get_rfid_scan_logs():
         app.run(debug=True, port=port, host='0.0.0.0')
     except Exception as e:
         print(f"CRITICAL: Flask failed to start: {e}")
-
 
