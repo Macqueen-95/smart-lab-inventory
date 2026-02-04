@@ -10,6 +10,7 @@ import { ArrowLeft, Wifi, CheckCircle2, X, AlertCircle, Package } from "lucide-r
 import { serviceAPI, rfidAPI } from "@/lib/api"
 
 type ServiceItem = {
+    id?: number
     rfid_uid: string
     item_name: string
     room_name: string
@@ -62,6 +63,7 @@ export default function InFromServicePage() {
                 }
 
                 setCart([...cart, {
+                    id: res.item.id,
                     rfid_uid: res.item.rfid_uid,
                     item_name: res.item.item_name,
                     room_name: res.item.room_name,
@@ -89,6 +91,7 @@ export default function InFromServicePage() {
 
         try {
             for (const item of cart) {
+                // Use item_id for backend lookup, fall back to rfid_uid
                 await serviceAPI.receiveIn(item.rfid_uid)
             }
             router.push("/serviceandrepair")

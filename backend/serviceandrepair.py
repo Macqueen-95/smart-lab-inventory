@@ -82,7 +82,7 @@ def send_item_out_for_service(item_id: int, rfid_uid: str):
                 item['item_name'],
                 item['room_name'],
                 'SERVICE_OUT',
-                'OUT_FOR_SERVICE'
+                'OUT'
             ))
             
             conn.commit()
@@ -99,8 +99,10 @@ def send_item_out_for_service(item_id: int, rfid_uid: str):
 
 def receive_item_from_service(item_id: int):
     """Mark an item as returned from service. Deletes active service row."""
+    print(f"[receive_item_from_service] Called with item_id={item_id}")
     conn = get_db_connection()
     if not conn:
+        print("[receive_item_from_service] Failed to get DB connection")
         return False
     try:
         with conn.cursor(row_factory=dict_row) as cur:
@@ -117,7 +119,10 @@ def receive_item_from_service(item_id: int):
             item = cur.fetchone()
 
             if not item:
+                print(f"[receive_item_from_service] Item not found: item_id={item_id}")
                 return False
+            
+            print(f"[receive_item_from_service] Found item: {dict(item)}")
 
             cur.execute(
                 """
@@ -129,7 +134,10 @@ def receive_item_from_service(item_id: int):
             service_record = cur.fetchone()
             
             if not service_record:
+                print(f"[receive_item_from_service] Service record not found for rfid_uid={item['rfid_uid']}")
                 return False
+            
+            print(f"[receive_item_from_service] Found service record: {dict(service_record)}")
             
             # Delete from service table (item returned)
             cur.execute(
@@ -152,7 +160,7 @@ def receive_item_from_service(item_id: int):
                     item["item_name"],
                     item["room_name"],
                     "SERVICE_IN",
-                    "RETURNED_FROM_SERVICE",
+                    "RETURNED",
                 ),
             )
             
