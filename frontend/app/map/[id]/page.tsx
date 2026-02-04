@@ -150,7 +150,7 @@ export default function IndividualMapPage() {
                                     <div className="p-4 rounded-lg bg-zinc-100 border border-zinc-300">
                                         <span className="text-zinc-600 text-sm">Total Items</span>
                                         <div className="text-2xl font-bold text-black">
-                                            {roomItems.reduce((acc, i) => acc + i.item_count, 0)}
+                                            {roomItems.length}
                                         </div>
                                     </div>
                                 </div>
@@ -169,9 +169,10 @@ export default function IndividualMapPage() {
                                                 </div>
                                                 <div className="flex-1 min-w-0">
                                                     <div className="font-medium text-black">{item.item_name}</div>
-                                                    <div className="text-xs text-zinc-600">ID: {item.id}</div>
+                                                    <div className="text-xs text-zinc-600">
+                                                        {item.rfid_uid ? `RFID: ${item.rfid_uid}` : `ID: ${item.id}`}
+                                                    </div>
                                                 </div>
-                                                <div className="text-lg font-bold text-black">{item.item_count}</div>
                                             </Card>
                                         ))}
                                     </div>

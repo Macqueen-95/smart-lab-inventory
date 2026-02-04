@@ -16,6 +16,7 @@ from db_management import (
     get_rooms,
     get_room_by_id,
     create_inventory_item,
+    create_bulk_inventory_items,
     get_inventory_items_by_room,
     update_inventory_item_icon,
     get_inventory_item_by_id,
@@ -298,7 +299,8 @@ def api_list_items(room_id):
 @app.route("/api/rooms/<int:room_id>/items", methods=["POST"])
 @login_required
 def api_create_item(room_id):
-    """Create inventory item. Body: item_name, item_count (optional, default 1), item_icon_url (optional)."""
+    """Create inventory item(s). Body: item_name, item_quantity (optional, default 1), item_icon_url (optional).
+    If item_quantity > 1, creates multiple individual items (item_name1, item_name2, etc.)"""
     uid = get_current_user_id()
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
@@ -309,11 +311,21 @@ def api_create_item(room_id):
     name = (data.get("item_name") or "").strip()
     if not name:
         return jsonify({"success": False, "message": "item_name is required"}), 400
-    count = int(data.get("item_count", 1) or 1)
-    row = create_inventory_item(room_id, name, count, data.get("item_icon_url"))
-    if not row:
-        return jsonify({"success": False, "message": "Failed to create item"}), 500
-    return jsonify({"success": True, "item": row}), 201
+    quantity = int(data.get("item_quantity", 1) or 1)
+    icon_url = data.get("item_icon_url")
+    
+    if quantity > 1:
+        # Bulk creation: create individual items with numbered names
+        items = create_bulk_inventory_items(room_id, name, quantity, icon_url)
+        if not items:
+            return jsonify({"success": False, "message": "Failed to create items"}), 500
+        return jsonify({"success": True, "items": items, "count": len(items)}), 201
+    else:
+        # Single item
+        row = create_inventory_item(room_id, name, icon_url)
+        if not row:
+            return jsonify({"success": False, "message": "Failed to create item"}), 500
+        return jsonify({"success": True, "item": row}), 201
 
 
 @app.route("/api/items/<int:item_id>/icon", methods=["PATCH"])

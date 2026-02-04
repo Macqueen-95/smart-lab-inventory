@@ -40,7 +40,6 @@ def init_tables(conn=None):
                     id SERIAL PRIMARY KEY,
                     room_id INTEGER NOT NULL REFERENCES rooms(id) ON DELETE CASCADE,
                     item_name VARCHAR(150) NOT NULL,
-                    item_count INTEGER DEFAULT 1,
                     item_icon_url TEXT,
                     rfid_uid VARCHAR(50) UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -237,17 +236,17 @@ def get_room_by_id(room_id: int, user_id: int):
 
 # ---- Inventory items ----
 
-def create_inventory_item(room_id: int, item_name: str, item_count: int = 1, item_icon_url: str = None):
-    """Create an inventory item in a room. Room must exist and belong to user (caller must verify)."""
+def create_inventory_item(room_id: int, item_name: str, item_icon_url: str = None, rfid_uid: str = None):
+    """Create a single inventory item in a room. Each item is individual with its own RFID."""
     conn = get_db_connection()
     if not conn:
         return None
     try:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                """INSERT INTO inventory_items (room_id, item_name, item_count, item_icon_url)
-                   VALUES (%s, %s, %s, %s) RETURNING id, item_name, item_count, item_icon_url, room_id, created_at""",
-                (room_id, item_name.strip(), max(1, int(item_count)), item_icon_url),
+                """INSERT INTO inventory_items (room_id, item_name, item_icon_url, rfid_uid)
+                   VALUES (%s, %s, %s, %s) RETURNING id, item_name, item_icon_url, rfid_uid, room_id, created_at""",
+                (room_id, item_name.strip(), item_icon_url, rfid_uid),
             )
             row = cur.fetchone()
             conn.commit()
@@ -260,14 +259,14 @@ def create_inventory_item(room_id: int, item_name: str, item_count: int = 1, ite
 
 
 def get_inventory_items_by_room(room_id: int):
-    """List inventory items for a room."""
+    """List all inventory items for a room."""
     conn = get_db_connection()
     if not conn:
         return []
     try:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                """SELECT id, item_name, item_count, item_icon_url, room_id, created_at
+                """SELECT id, item_name, item_icon_url, rfid_uid, room_id, created_at
                    FROM inventory_items WHERE room_id = %s ORDER BY id""",
                 (room_id,),
             )
@@ -308,7 +307,7 @@ def get_inventory_item_by_id(item_id: int, user_id: int):
     try:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                """SELECT i.id, i.item_name, i.item_count, i.item_icon_url, i.room_id, i.created_at
+                """SELECT i.id, i.item_name, i.item_icon_url, i.rfid_uid, i.room_id, i.created_at
                    FROM inventory_items i
                    JOIN rooms r ON r.id = i.room_id WHERE i.id = %s AND r.user_id = %s""",
                 (item_id, user_id),
@@ -345,7 +344,7 @@ def assign_rfid_to_item(item_id: int, rfid_uid: str, user_id: int):
             
             # Verify the item belongs to the user
             cur.execute(
-                """SELECT i.id, i.item_name, i.item_count, i.item_icon_url, i.room_id, i.created_at
+                """SELECT i.id, i.item_name, i.item_icon_url, i.rfid_uid, i.room_id, i.created_at
                    FROM inventory_items i
                    JOIN rooms r ON r.id = i.room_id 
                    WHERE i.id = %s AND r.user_id = %s""",
@@ -478,5 +477,37 @@ def get_latest_unassigned_rfid():
     except Exception as e:
         print(f"get_latest_unassigned_rfid error: {e}")
         return None
+    finally:
+        conn.close()
+
+def create_bulk_inventory_items(room_id: int, base_name: str, quantity: int, item_icon_url: str = None):
+    """
+    Create multiple individual inventory items at once.
+    For example: base_name="Monitor", quantity=10 creates Monitor1, Monitor2, ..., Monitor10
+    Each item must have its own RFID assigned separately.
+    Returns: list of created items or empty list on error
+    """
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        created_items = []
+        with conn.cursor(row_factory=dict_row) as cur:
+            for i in range(1, int(quantity) + 1):
+                item_name = f"{base_name.strip()}{i}"
+                cur.execute(
+                    """INSERT INTO inventory_items (room_id, item_name, item_icon_url)
+                       VALUES (%s, %s, %s) RETURNING id, item_name, item_icon_url, rfid_uid, room_id, created_at""",
+                    (room_id, item_name, item_icon_url),
+                )
+                item = cur.fetchone()
+                if item:
+                    created_items.append(dict(item))
+            conn.commit()
+        return created_items
+    except Exception as e:
+        print(f"create_bulk_inventory_items error: {e}")
+        return []
     finally:
         conn.close()

@@ -13,7 +13,7 @@ export default function ManageItemsPage() {
     const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null)
     const [items, setItems] = useState<InventoryItem[]>([])
     const [searchQuery, setSearchQuery] = useState("")
-    const [newItem, setNewItem] = useState<{ item_name: string; item_count: number; item_icon_url?: string } | null>(null)
+    const [newItem, setNewItem] = useState<{ item_name: string; item_quantity: number; item_icon_url?: string } | null>(null)
     const [iconFile, setIconFile] = useState<File | null>(null)
     const [isLoadingRooms, setIsLoadingRooms] = useState(true)
     const [isLoadingItems, setIsLoadingItems] = useState(false)
@@ -72,7 +72,7 @@ export default function ManageItemsPage() {
     })
 
     const handleAddItem = () => {
-        setNewItem({ item_name: "", item_count: 1 })
+        setNewItem({ item_name: "", item_quantity: 1 })
         setIconFile(null)
     }
 
@@ -87,11 +87,17 @@ export default function ManageItemsPage() {
             }
             const res = await itemsAPI.create(selectedRoomId, {
                 item_name: newItem.item_name.trim(),
-                item_count: newItem.item_count,
+                item_quantity: newItem.item_quantity,
                 item_icon_url: iconUrl,
             })
-            if (res.success && res.item) {
-                setItems((prev) => [...prev, res.item!])
+            if (res.success) {
+                if (res.items) {
+                    // Bulk creation
+                    setItems((prev) => [...prev, ...res.items!])
+                } else if (res.item) {
+                    // Single item
+                    setItems((prev) => [...prev, res.item!])
+                }
                 setNewItem(null)
                 setIconFile(null)
             } else setError("Failed to create item")
@@ -272,9 +278,9 @@ export default function ManageItemsPage() {
                                         <Input
                                             type="number"
                                             min={1}
-                                            value={newItem.item_count}
+                                            value={newItem.item_quantity}
                                             onChange={(e) =>
-                                                setNewItem({ ...newItem, item_count: parseInt(e.target.value) || 1 })
+                                                setNewItem({ ...newItem, item_quantity: parseInt(e.target.value) || 1 })
                                             }
                                             className="bg-white text-black"
                                         />
@@ -377,10 +383,6 @@ export default function ManageItemsPage() {
                                         )}
                                     </CardHeader>
                                     <CardContent className="space-y-2">
-                                        <div className="flex justify-between text-sm">
-                                            <span className="text-zinc-600">Quantity:</span>
-                                            <span className="font-bold">{item.item_count}</span>
-                                        </div>
                                         <Button
                                             variant="outline"
                                             size="sm"

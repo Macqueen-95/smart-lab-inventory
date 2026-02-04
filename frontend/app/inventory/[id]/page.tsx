@@ -6,7 +6,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { Button } from "@/components/ui/Button"
-import { Search, ArrowLeft, Package } from "lucide-react"
+import { Search, ArrowLeft, Package, Wifi } from "lucide-react"
 import { roomsAPI, itemsAPI, type Room, type InventoryItem } from "@/lib/api"
 
 export default function RoomInventoryPage() {
@@ -127,15 +127,13 @@ export default function RoomInventoryPage() {
                             </div>
                             <CardHeader>
                                 <CardTitle className="line-clamp-1">{item.item_name}</CardTitle>
+                                {item.rfid_uid && (
+                                    <CardDescription className="flex items-center gap-2 mt-2">
+                                        <Wifi className="h-3 w-3" />
+                                        <code className="text-xs font-mono">{item.rfid_uid}</code>
+                                    </CardDescription>
+                                )}
                             </CardHeader>
-                            <CardContent>
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-sm">
-                                        <span className="text-zinc-600">Quantity:</span>
-                                        <span className="font-bold text-lg">{item.item_count}</span>
-                                    </div>
-                                </div>
-                            </CardContent>
                         </Card>
                     ))}
                 </div>

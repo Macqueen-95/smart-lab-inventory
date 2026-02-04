@@ -120,7 +120,6 @@ export interface Room {
 export interface InventoryItem {
   id: number
   item_name: string
-  item_count: number
   item_icon_url: string | null
   rfid_uid?: string | null
   room_id: number
@@ -165,6 +164,14 @@ export const roomsAPI = {
     const res = await api.get<{ success: boolean; rooms: Room[] }>("/rooms")
     return res.data
   },
+  create: async (data: {
+    floor_plan_id: number
+    room_name: string
+    room_description?: string
+  }): Promise<{ success: boolean; room?: Room; message?: string }> => {
+    const res = await api.post<{ success: boolean; room?: Room; message?: string }>("/rooms", data)
+    return res.data
+  },
 }
 
 export const itemsAPI = {
@@ -174,9 +181,14 @@ export const itemsAPI = {
   },
   create: async (
     roomId: number,
-    data: { item_name: string; item_count?: number; item_icon_url?: string }
+    data: { item_name: string; item_quantity?: number; item_icon_url?: string }
   ) => {
-    const res = await api.post<{ success: boolean; item: InventoryItem }>(`/rooms/${roomId}/items`, data)
+    const res = await api.post<{
+      success: boolean
+      item?: InventoryItem
+      items?: InventoryItem[]
+      count?: number
+    }>(`/rooms/${roomId}/items`, data)
     return res.data
   },
   updateIcon: async (itemId: number, roomId: number, item_icon_url: string) => {
