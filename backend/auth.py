@@ -156,13 +156,15 @@ def get_user_by_id(userid):
 
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute("SELECT id, name, userid, created_at FROM users WHERE userid = %s", (userid,))
+            cur.execute("SELECT id, name, userid, profile_picture_url, user_rfid_uid, created_at FROM users WHERE userid = %s", (userid,))
             user = cur.fetchone()
             if user:
                 return {
                     "id": user["id"],
                     "name": user["name"],
                     "userid": user["userid"],
+                    "profile_picture_url": user["profile_picture_url"],
+                    "user_rfid_uid": user["user_rfid_uid"],
                     "created_at": user["created_at"].isoformat() if user["created_at"] else None,
                 }
             return None
