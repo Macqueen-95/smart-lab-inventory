@@ -38,6 +38,7 @@ from auditing import (
     start_audit,
     complete_audit,
     generate_audit_report,
+    get_audit_items_status,
 )
 import os
 from functools import wraps
@@ -770,6 +771,26 @@ def audit_report_api(audit_id: int):
     if report:
         return jsonify({"success": True, "report": report}), 200
     return jsonify({"success": False, "message": "Failed to generate report"}), 500
+
+
+@app.route("/api/audits/<int:audit_id>/items", methods=["GET"])
+@login_required
+def audit_items_api(audit_id: int):
+    userid = session.get("user_id")
+    if not userid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    audit = get_audit_by_id(audit_id)
+    if not audit:
+        return jsonify({"success": False, "message": "Audit not found"}), 404
+
+    if not is_admin_user(userid) and audit.get("assigned_userid") != userid:
+        return jsonify({"success": False, "message": "Forbidden"}), 403
+
+    items_status = get_audit_items_status(audit_id)
+    if items_status:
+        return jsonify({"success": True, **items_status}), 200
+    return jsonify({"success": False, "message": "Failed to load audit items"}), 500
 
 
 if __name__ == "__main__":

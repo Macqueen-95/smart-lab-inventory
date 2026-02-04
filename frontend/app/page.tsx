@@ -1,19 +1,64 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Package, Users, Activity, Router } from "lucide-react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
-
-const data = [
-  { name: "Conf Room A", total: 12 },
-  { name: "Lab 1", total: 45 },
-  { name: "Server Room", total: 23 },
-  { name: "Cafeteria", total: 8 },
-  { name: "Lobby", total: 15 },
-  { name: "Office 204", total: 30 },
-]
+import { itemsAPI, roomsAPI, rfidAPI, type RFIDScanLog } from "@/lib/api"
 
 export default function Home() {
+  const [roomData, setRoomData] = useState<Array<{ name: string; total: number }>>([])
+  const [recentLogs, setRecentLogs] = useState<RFIDScanLog[]>([])
+  const [stats, setStats] = useState({
+    totalAssets: 0,
+    activeScanners: 0,
+    recentActivity: 0,
+    totalRooms: 0,
+  })
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    const loadDashboard = async () => {
+      setLoading(true)
+      try {
+        const roomsRes = await roomsAPI.list()
+        const rooms = roomsRes.success ? roomsRes.rooms : []
+
+        const roomTotals = await Promise.all(
+          rooms.map(async (room) => {
+            const itemsRes = await itemsAPI.listByRoom(room.id)
+            const count = itemsRes.success ? itemsRes.items.length : 0
+            return { name: room.room_name, total: count }
+          })
+        )
+
+        const totalAssets = roomTotals.reduce((sum, r) => sum + r.total, 0)
+        setRoomData(roomTotals)
+
+        const logsRes = await rfidAPI.getScanLogs(100)
+        const logs = logsRes.success ? logsRes.logs : []
+        const now = Date.now()
+        const lastHourLogs = logs.filter((log) => {
+          const t = new Date(log.scanned_at).getTime()
+          return now - t <= 60 * 60 * 1000
+        })
+        const activeScanners = new Set(lastHourLogs.map((l) => l.scanner_id)).size
+
+        setRecentLogs(logs.slice(0, 5))
+        setStats({
+          totalAssets,
+          activeScanners,
+          recentActivity: lastHourLogs.length,
+          totalRooms: rooms.length,
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadDashboard()
+  }, [])
+
   return (
     <div className="space-y-6">
       <div>
@@ -28,8 +73,8 @@ export default function Home() {
             <Package className="h-4 w-4 text-zinc-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-zinc-500">+20.1% from last month</p>
+            <div className="text-2xl font-bold">{loading ? "—" : stats.totalAssets}</div>
+            <p className="text-xs text-zinc-500">Tagged items across rooms</p>
           </CardContent>
         </Card>
         <Card>
@@ -38,8 +83,8 @@ export default function Home() {
             <Router className="h-4 w-4 text-zinc-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12</div>
-            <p className="text-xs text-zinc-500">All systems operational</p>
+            <div className="text-2xl font-bold">{loading ? "—" : stats.activeScanners}</div>
+            <p className="text-xs text-zinc-500">Active in the last hour</p>
           </CardContent>
         </Card>
         <Card>
@@ -48,7 +93,7 @@ export default function Home() {
             <Activity className="h-4 w-4 text-zinc-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+573</div>
+            <div className="text-2xl font-bold">{loading ? "—" : stats.recentActivity}</div>
             <p className="text-xs text-zinc-500">Scans in the last hour</p>
           </CardContent>
         </Card>
@@ -58,7 +103,7 @@ export default function Home() {
             <Users className="h-4 w-4 text-zinc-500" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8</div>
+            <div className="text-2xl font-bold">{loading ? "—" : stats.totalRooms}</div>
             <p className="text-xs text-zinc-500">Monitored spaces</p>
           </CardContent>
         </Card>
@@ -75,7 +120,7 @@ export default function Home() {
           <CardContent className="pl-2">
             <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data}>
+                <BarChart data={roomData}>
                   <XAxis
                     dataKey="name"
                     stroke="#888888"
@@ -114,16 +159,19 @@ export default function Home() {
           </CardHeader>
           <CardContent>
             <div className="space-y-8">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div className="flex items-center" key={i}>
+              {recentLogs.length === 0 && (
+                <p className="text-sm text-zinc-500">No recent scans.</p>
+              )}
+              {recentLogs.map((log) => (
+                <div className="flex items-center" key={log.id}>
                   <div className="space-y-1">
-                    <p className="text-sm font-medium leading-none">Conf Room A</p>
+                    <p className="text-sm font-medium leading-none">{log.room || "Unknown Room"}</p>
                     <p className="text-xs text-zinc-500 text-muted-foreground">
-                      Item #{1000 + i} Detected
+                      {log.item_name || log.rfid_uid} Detected
                     </p>
                   </div>
                   <div className="ml-auto font-medium text-xs text-zinc-500">
-                    {i * 2} min ago
+                    {new Date(log.scanned_at).toLocaleTimeString()}
                   </div>
                 </div>
               ))}

@@ -374,6 +374,10 @@ export const auditingAPI = {
     const res = await api.get<{ success: boolean; report?: any; message?: string }>(`/audits/${auditId}/report`)
     return res.data
   },
+  items: async (auditId: number): Promise<{ success: boolean; items?: any[]; summary?: any; audit?: any; message?: string }> => {
+    const res = await api.get<{ success: boolean; items?: any[]; summary?: any; audit?: any; message?: string }>(`/audits/${auditId}/items`)
+    return res.data
+  },
 }
 
 /** Upload a file to Vercel Blob via our API route. Returns the public URL. Call from client only. */

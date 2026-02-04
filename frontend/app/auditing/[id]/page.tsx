@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
+import { Badge } from "@/components/ui/Badge"
 import { auditingAPI, authAPI } from "@/lib/api"
 import { ArrowLeft, PlayCircle, FileText, CheckCircle2 } from "lucide-react"
 
@@ -20,10 +21,20 @@ export default function AuditDetailPage() {
     const [scannerId, setScannerId] = useState(SCANNERS[0])
     const [isAdmin, setIsAdmin] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [items, setItems] = useState<any[]>([])
+    const [itemsSummary, setItemsSummary] = useState<any | null>(null)
 
     const loadAudit = async () => {
         const res = await auditingAPI.get(auditId)
         if (res.success && res.audit) setAudit(res.audit)
+    }
+
+    const loadItems = async () => {
+        const res = await auditingAPI.items(auditId)
+        if (res.success) {
+            setItems(res.items || [])
+            setItemsSummary(res.summary || null)
+        }
     }
 
     useEffect(() => {
@@ -35,11 +46,19 @@ export default function AuditDetailPage() {
         if (auditId) init()
     }, [auditId])
 
+    useEffect(() => {
+        if (!audit?.started_at) return
+        loadItems()
+        const interval = setInterval(loadItems, 100)
+        return () => clearInterval(interval)
+    }, [audit?.started_at, audit?.scanner_id])
+
     const handleStart = async () => {
         setError(null)
         const res = await auditingAPI.start(auditId, scannerId)
         if (res.success) {
             await loadAudit()
+            await loadItems()
         } else {
             setError(res.message || "Failed to start audit")
         }
@@ -105,6 +124,40 @@ export default function AuditDetailPage() {
                     <div><span className="text-zinc-500">Scanner:</span> {audit.scanner_id || "Not selected"}</div>
                 </CardContent>
             </Card>
+
+            {audit.started_at && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle>Room Items</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        {itemsSummary && (
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                                <div><span className="text-zinc-500">Expected</span><div className="font-semibold">{itemsSummary.total_expected}</div></div>
+                                <div><span className="text-zinc-500">Scanned</span><div className="font-semibold">{itemsSummary.scanned}</div></div>
+                                <div><span className="text-zinc-500">Missing</span><div className="font-semibold">{itemsSummary.missing}</div></div>
+                                <div><span className="text-zinc-500">In Service</span><div className="font-semibold">{itemsSummary.in_service}</div></div>
+                            </div>
+                        )}
+                        {items.length === 0 && (
+                            <p className="text-sm text-zinc-500">No items found for this room.</p>
+                        )}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {items.map((item: any) => (
+                                <div key={item.rfid_uid} className="border rounded p-3">
+                                    <div className="flex items-center justify-between gap-2">
+                                        <div className="font-medium">{item.item_name}</div>
+                                        {item.status === "SCANNED" && <Badge variant="success">Scanned</Badge>}
+                                        {item.status === "IN_SERVICE" && <Badge variant="warning">In Service</Badge>}
+                                        {item.status === "MISSING" && <Badge variant="destructive">Missing</Badge>}
+                                    </div>
+                                    <div className="text-xs text-zinc-500 mt-1">{item.rfid_uid}</div>
+                                </div>
+                            ))}
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             <Card>
                 <CardHeader>
