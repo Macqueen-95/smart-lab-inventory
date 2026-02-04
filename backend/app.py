@@ -475,29 +475,43 @@ def api_get_latest_scan():
 @login_required
 def send_out_for_service():
     """Send an item out for service."""
-    uid = session.get("user_id")
-    if not uid:
-        return jsonify({"success": False, "message": "User not found"}), 404
-    
-    data = request.get_json()
-    rfid_uid = data.get("rfid_uid", "").strip()
-    
-    if not rfid_uid:
-        return jsonify({"success": False, "message": "RFID UID required"}), 400
-    
-    # Get item by RFID
-    item = get_item_by_rfid_for_service(rfid_uid)
-    if not item:
-        return jsonify({"success": False, "message": "Item not found"}), 404
-    
-    result = send_item_out_for_service(item["id"], rfid_uid)
-    
-    if result and "error" not in result:
-        return jsonify({"success": True, "service_record": result}), 201
-    elif result and "error" in result:
-        return jsonify({"success": False, "message": result["error"]}), 400
-    else:
-        return jsonify({"success": False, "message": "Failed to send item out"}), 500
+    try:
+        uid = session.get("user_id")
+        if not uid:
+            return jsonify({"success": False, "message": "User not found"}), 404
+        
+        data = request.get_json()
+        rfid_uid = data.get("rfid_uid", "").strip()
+        
+        if not rfid_uid:
+            return jsonify({"success": False, "message": "RFID UID required"}), 400
+        
+        print(f"[SERVICE OUT] Looking for item with RFID: {rfid_uid}")
+        
+        # Get item by RFID
+        item = get_item_by_rfid_for_service(rfid_uid)
+        if not item:
+            print(f"[SERVICE OUT] Item not found for RFID: {rfid_uid}")
+            return jsonify({"success": False, "message": "Item not found"}), 404
+        
+        print(f"[SERVICE OUT] Found item: {item}")
+        
+        result = send_item_out_for_service(item["id"], rfid_uid)
+        
+        if result and "error" not in result:
+            print(f"[SERVICE OUT] Success: {result}")
+            return jsonify({"success": True, "service_record": result}), 201
+        elif result and "error" in result:
+            print(f"[SERVICE OUT] Error: {result['error']}")
+            return jsonify({"success": False, "message": result["error"]}), 400
+        else:
+            print(f"[SERVICE OUT] Failed to send item out")
+            return jsonify({"success": False, "message": "Failed to send item out"}), 500
+    except Exception as e:
+        print(f"[SERVICE OUT] Exception: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": f"Server error: {str(e)}"}), 500
 
 
 @app.route("/api/service/in", methods=["POST"])
