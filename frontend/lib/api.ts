@@ -1,8 +1,13 @@
 import axios from 'axios'
 
 // Backend API: local dev uses localhost; on Render use NEXT_PUBLIC_API_URL or fallback to Render backend
+function normalizeApiBaseUrl(url: string): string {
+  const trimmed = url.replace(/\/+$/, "")
+  return trimmed.endsWith("/api") ? trimmed : `${trimmed}/api`
+}
+
 function getApiBaseUrl(): string {
-  if (process.env.NEXT_PUBLIC_API_URL) return process.env.NEXT_PUBLIC_API_URL
+  if (process.env.NEXT_PUBLIC_API_URL) return normalizeApiBaseUrl(process.env.NEXT_PUBLIC_API_URL)
   if (typeof window !== 'undefined' && window.location.hostname !== 'localhost') {
     return 'https://cyber-forge-1.onrender.com/api'
   }
