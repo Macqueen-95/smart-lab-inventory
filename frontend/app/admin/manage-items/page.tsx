@@ -133,6 +133,30 @@ export default function ManageItemsPage() {
         setRfidScanListening(false)
     }
 
+    // Poll for new RFID scans when in scanning mode
+    useEffect(() => {
+        if (!rfidScanListening || scanningItemId === null) return
+
+        const pollForScan = async () => {
+            try {
+                const result = await rfidAPI.getLatestUnassigned()
+                if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfidUid) {
+                    setScannedRfidUid(result.rfid_uid)
+                }
+            } catch (e) {
+                // Ignore errors during polling
+            }
+        }
+
+        // Poll every 2 seconds
+        const interval = setInterval(pollForScan, 2000)
+        // Also check immediately
+        pollForScan()
+
+        return () => clearInterval(interval)
+    }, [rfidScanListening, scanningItemId, scannedRfidUid])
+
+
     const handleAssignRfid = async () => {
         if (!scanningItemId || !scannedRfidUid.trim()) {
             setError("Please enter or scan an RFID UID")

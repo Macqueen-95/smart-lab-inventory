@@ -453,3 +453,36 @@ def get_rfid_scan_logs(user_id: int, limit: int = 100):
         return []
     finally:
         conn.close()
+
+
+def get_latest_unassigned_rfid():
+    """
+    Get the most recent RFID scan that is UNKNOWN (not assigned to any item).
+    Returns: {"rfid_uid": str, "scanned_at": str} or None
+    """
+    conn = get_db_connection()
+    if not conn:
+        return None
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT rfid_uid, scanned_at
+                   FROM rfid_scan_logs
+                   WHERE scan_status = 'UNKNOWN'
+                   ORDER BY scanned_at DESC
+                   LIMIT 1""",
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        print(f"get_latest_unassigned_rfid error: {e}")
+        return None
+    finally:
+        conn.close()
+
+    except Exception as e:
+        print(f"get_rfid_scan_logs error: {e}")
+        return []
+    finally:
+        conn.close()

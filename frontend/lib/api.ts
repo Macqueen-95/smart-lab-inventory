@@ -224,6 +224,10 @@ export const rfidAPI = {
     })
     return res.data
   },
+  getLatestUnassigned: async () => {
+    const res = await api.get<{ success: boolean; rfid_uid?: string; scanned_at?: string }>("/rfid/latest-unassigned")
+    return res.data
+  },
 }
 
 /** Upload a file to Vercel Blob via our API route. Returns the public URL. Call from client only. */

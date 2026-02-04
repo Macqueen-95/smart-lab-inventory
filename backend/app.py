@@ -20,6 +20,7 @@ from db_management import (
     update_inventory_item_icon,
     get_inventory_item_by_id,
     get_rfid_scan_logs,
+    get_latest_unassigned_rfid,
 )
 from rfid_uid import process_rfid_scan, assign_rfid_uid_to_item
 import os
@@ -390,6 +391,22 @@ def api_get_rfid_scan_logs():
     logs = get_rfid_scan_logs(uid, limit)
     
     return jsonify({"success": True, "logs": logs}), 200
+
+
+@app.route("/api/rfid/latest-unassigned", methods=["GET"])
+@login_required
+def api_get_latest_unassigned_rfid():
+    """Get the latest UNKNOWN RFID scan (for auto-populating during assignment)."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    result = get_latest_unassigned_rfid()
+    
+    if result:
+        return jsonify({"success": True, "rfid_uid": result["rfid_uid"], "scanned_at": result["scanned_at"]}), 200
+    else:
+        return jsonify({"success": False, "message": "No unassigned scans found"}), 404
 
 
 if __name__ == "__main__":
