@@ -428,6 +428,47 @@ def api_get_latest_unassigned_rfid():
         return jsonify({"success": False, "message": "No unassigned scans found"}), 404
 
 
+@app.route("/api/rfid/latest-scan", methods=["GET"])
+@login_required
+def api_get_latest_scan():
+    """Get the latest RFID scan regardless of status (for service operations)."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    from db_management import get_db_connection
+    from psycopg.rows import dict_row
+    
+    conn = get_db_connection()
+    if not conn:
+        return jsonify({"success": False, "message": "Database connection failed"}), 500
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute("""
+                SELECT rfid_uid, scanned_at 
+                FROM rfid_scan_logs 
+                WHERE scan_status IN ('OK', 'UNKNOWN')
+                ORDER BY scanned_at DESC 
+                LIMIT 1
+            """)
+            result = cur.fetchone()
+            
+            if result:
+                return jsonify({
+                    "success": True, 
+                    "rfid_uid": result["rfid_uid"], 
+                    "scanned_at": result["scanned_at"].isoformat() if result["scanned_at"] else None
+                }), 200
+            else:
+                return jsonify({"success": False, "message": "No recent scans found"}), 404
+    except Exception as e:
+        print(f"Error getting latest scan: {e}")
+        return jsonify({"success": False, "message": "Failed to fetch latest scan"}), 500
+    finally:
+        conn.close()
+
+
 # ---- Service & Repair Routes ----
 
 @app.route("/api/service/out", methods=["POST"])

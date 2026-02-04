@@ -31,7 +31,7 @@ export default function InFromServicePage() {
 
         const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestUnassigned()
+                const result = await rfidAPI.getLatestScan()
                 if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfid) {
                     setScannedRfid(result.rfid_uid)
                 }
