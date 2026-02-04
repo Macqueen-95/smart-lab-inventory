@@ -485,6 +485,7 @@ def api_delete_item(item_id):
 
 
 # ---- RFID Management ----
+@app.route("/api/rfid/scan", methods=["POST"])
 def api_process_rfid_scan():
     """
     Process an RFID scan from a scanner device.
