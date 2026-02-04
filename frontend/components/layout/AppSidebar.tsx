@@ -24,7 +24,7 @@ export function AppSidebar() {
     const [isMobileOpen, setIsMobileOpen] = useState(false)
     const [isCollapsed, setIsCollapsed] = useState(false)
     const [isAuthenticated, setIsAuthenticated] = useState(false)
-    const [user, setUser] = useState<{ name: string; userid: string } | null>(null)
+    const [user, setUser] = useState<{ name: string; userid: string; profile_picture_url?: string; user_rfid_uid?: string } | null>(null)
 
     const checkAuth = async () => {
         try {
@@ -161,17 +161,32 @@ export function AppSidebar() {
                 <div className={cn("p-4 border-t border-gray-200 space-y-2", isCollapsed && "md:px-2")}>
                     {isAuthenticated && user ? (
                         <>
-                            <div className={cn("flex items-center gap-3 px-4 py-3", isCollapsed && "md:justify-center md:px-0")}>
-                                <div className="h-8 w-8 rounded-none bg-black text-white flex items-center justify-center text-xs font-bold flex-shrink-0">
-                                    {user.name.charAt(0).toUpperCase()}
+                            <Link 
+                                href="/profile" 
+                                onClick={() => setIsMobileOpen(false)}
+                                className={cn(
+                                    "flex items-center gap-3 px-3 py-4 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer",
+                                    isCollapsed && "md:justify-center md:px-2"
+                                )}
+                            >
+                                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-400 to-blue-600 text-white flex items-center justify-center text-sm font-bold flex-shrink-0 overflow-hidden">
+                                    {user.profile_picture_url ? (
+                                        <img 
+                                            src={user.profile_picture_url} 
+                                            alt={user.name} 
+                                            className="h-12 w-12 rounded-full object-cover" 
+                                        />
+                                    ) : (
+                                        user.name.charAt(0).toUpperCase()
+                                    )}
                                 </div>
                                 {!isCollapsed && (
-                                    <div className="text-xs flex-1">
-                                        <p className="font-medium text-black">{user.name}</p>
-                                        <p className="text-zinc-500">{user.userid}</p>
+                                    <div className="text-sm flex-1">
+                                        <p className="font-semibold text-black">{user.name}</p>
+                                        <p className="text-zinc-500 text-xs">{user.userid}</p>
                                     </div>
                                 )}
-                            </div>
+                            </Link>
                             <Button
                                 onClick={handleLogout}
                                 variant="outline"

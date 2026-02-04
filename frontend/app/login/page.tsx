@@ -41,19 +41,22 @@ export default function LoginPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative bg-white">
+        <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden">
             {/* Background Image */}
             <div 
-                className="absolute inset-0 bg-cover bg-center bg-no-repeat"
+                className="absolute inset-0 z-0"
                 style={{ 
                     backgroundImage: 'url(/login.png)',
-                    opacity: 0.2
+                    backgroundSize: 'cover',
+                    backgroundPosition: 'center',
+                    backgroundRepeat: 'no-repeat',
+                    filter: 'brightness(0.7) blur(1px)'
                 }}
             />
-            {/* Overlay for additional dimming */}
-            <div className="absolute inset-0 bg-black/10" />
+            {/* White overlay for better readability */}
+            <div className="absolute inset-0 bg-white/40 z-0" />
             
-            <Card className="w-full max-w-md shadow-xl relative z-10">
+            <Card className="w-full max-w-md shadow-2xl relative z-10 bg-white border-2">
                 <CardHeader className="text-center">
                     <div className="flex justify-center mb-4">
                         <div className="p-3 bg-blue-100 rounded-full">
