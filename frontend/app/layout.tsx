@@ -16,6 +16,10 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Smart Lab Inventory",
   description: "Enterprise Asset Management",
+  icons: {
+    icon: "/logoo.png",
+    apple: "/logoo.png",
+  },
 };
 
 export default function RootLayout({

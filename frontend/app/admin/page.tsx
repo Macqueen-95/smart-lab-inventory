@@ -3,7 +3,7 @@
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { Plus, Package, Settings } from "lucide-react"
+import { Plus, Package, Settings, ArrowLeftRight, Radio, Users } from "lucide-react"
 
 export default function AdminPage() {
     return (
@@ -48,6 +48,44 @@ export default function AdminPage() {
                         </CardHeader>
                         <CardContent>
                             <Button className="w-full bg-white text-black border border-zinc-300 hover:bg-zinc-50">Manage Items</Button>
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                <Link href="/lendborrow">
+                    <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+                        <CardHeader>
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-3 bg-purple-100 rounded-lg">
+                                    <Users className="h-6 w-6 text-purple-600" />
+                                </div>
+                                <CardTitle>Lend/Borrow</CardTitle>
+                            </div>
+                            <CardDescription>
+                                Track items lent out and manage returns from users.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Button className="w-full bg-white text-black border border-zinc-300 hover:bg-zinc-50">Lend Items</Button>
+                        </CardContent>
+                    </Card>
+                </Link>
+
+                <Link href="/admin/swap-rfid">
+                    <Card className="hover:shadow-lg transition-shadow cursor-pointer h-full">
+                        <CardHeader>
+                            <div className="flex items-center gap-3 mb-2">
+                                <div className="p-3 bg-orange-100 rounded-lg">
+                                    <Radio className="h-6 w-6 text-orange-600" />
+                                </div>
+                                <CardTitle>Swap RFID</CardTitle>
+                            </div>
+                            <CardDescription>
+                                Transfer RFID tags from damaged items to replacements.
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Button className="w-full bg-white text-black border border-zinc-300 hover:bg-zinc-50">Swap RFID</Button>
                         </CardContent>
                     </Card>
                 </Link>

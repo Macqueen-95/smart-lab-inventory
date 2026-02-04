@@ -59,17 +59,17 @@ export default function RegisterPage() {
     }
 
     return (
-        <div className="min-h-screen flex items-center justify-center p-4 relative">
+        <div className="min-h-screen flex items-center justify-center p-4 relative bg-white">
             {/* Background Image */}
             <div 
                 className="absolute inset-0 bg-cover bg-center bg-no-repeat"
                 style={{ 
                     backgroundImage: 'url(/login.png)',
-                    opacity: 0.3
+                    opacity: 0.2
                 }}
             />
             {/* Overlay for additional dimming */}
-            <div className="absolute inset-0 bg-black/20" />
+            <div className="absolute inset-0 bg-black/10" />
             
             <Card className="w-full max-w-md shadow-xl relative z-10">
                 <CardHeader className="text-center">
