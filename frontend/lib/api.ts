@@ -184,6 +184,10 @@ export const floorPlansAPI = {
     const res = await api.get<{ success: boolean; rooms: Room[] }>(`/floor-plans/${planId}/rooms`)
     return res.data
   },
+  delete: async (planId: number) => {
+    const res = await api.delete<{ success: boolean; message?: string }>(`/floor-plans/${planId}`)
+    return res.data
+  },
 }
 
 export const adminFloorPlansAPI = {
@@ -212,6 +216,10 @@ export const roomsAPI = {
     room_description?: string
   }): Promise<{ success: boolean; room?: Room; message?: string }> => {
     const res = await api.post<{ success: boolean; room?: Room; message?: string }>("/rooms", data)
+    return res.data
+  },
+  delete: async (roomId: number) => {
+    const res = await api.delete<{ success: boolean; message?: string }>(`/rooms/${roomId}`)
     return res.data
   },
 }
@@ -263,7 +271,7 @@ export const itemsAPI = {
   },
   deleteItem: async (itemId: number, roomId: number) => {
     const res = await api.delete<{ success: boolean; message?: string }>(
-      `/items/${itemId}?room_id=${roomId}`
+      `/items/${itemId}`
     )
     return res.data
   },

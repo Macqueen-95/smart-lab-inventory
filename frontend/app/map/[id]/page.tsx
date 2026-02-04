@@ -1,16 +1,17 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/Sheet"
 import { Card, CardContent } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { Package, ArrowLeft, MapPin } from "lucide-react"
-import { floorPlansAPI, itemsAPI, type FloorPlan, type Room, type InventoryItem } from "@/lib/api"
+import { Package, ArrowLeft, MapPin, Trash2, X } from "lucide-react"
+import { floorPlansAPI, roomsAPI, itemsAPI, type FloorPlan, type Room, type InventoryItem } from "@/lib/api"
 
 export default function IndividualMapPage() {
     const params = useParams()
+    const router = useRouter()
     const planId = Number(params.id)
     const [floorPlan, setFloorPlan] = useState<FloorPlan | null>(null)
     const [rooms, setRooms] = useState<Room[]>([])
@@ -19,6 +20,9 @@ export default function IndividualMapPage() {
     const [isSheetOpen, setIsSheetOpen] = useState(false)
     const [isLoading, setIsLoading] = useState(true)
     const [error, setError] = useState<string | null>(null)
+    const [deletingFloorPlan, setDeletingFloorPlan] = useState(false)
+    const [deletingRoomId, setDeletingRoomId] = useState<number | null>(null)
+    const [deleting, setDeleting] = useState(false)
 
     useEffect(() => {
         let cancelled = false
@@ -59,6 +63,52 @@ export default function IndividualMapPage() {
         }
     }
 
+    const handleDeleteFloorPlan = async () => {
+        if (!planId) return
+        setDeleting(true)
+        setError(null)
+        try {
+            const res = await floorPlansAPI.delete(planId)
+            if (res.success) {
+                router.push("/map")
+            } else {
+                setError(res.message || "Failed to delete floor plan")
+                setDeletingFloorPlan(false)
+            }
+        } catch (e: any) {
+            const errorMsg = e.response?.data?.message || "Failed to delete floor plan"
+            setError(errorMsg)
+            setDeletingFloorPlan(false)
+        } finally {
+            setDeleting(false)
+        }
+    }
+
+    const handleDeleteRoom = async (roomId: number) => {
+        setDeleting(true)
+        setError(null)
+        try {
+            const res = await roomsAPI.delete(roomId)
+            if (res.success) {
+                setRooms((prev) => prev.filter((r) => r.id !== roomId))
+                setDeletingRoomId(null)
+                if (selectedRoom?.id === roomId) {
+                    setIsSheetOpen(false)
+                    setSelectedRoom(null)
+                }
+            } else {
+                setError(res.message || "Failed to delete room")
+                setDeletingRoomId(null)
+            }
+        } catch (e: any) {
+            const errorMsg = e.response?.data?.message || "Failed to delete room"
+            setError(errorMsg)
+            setDeletingRoomId(null)
+        } finally {
+            setDeleting(false)
+        }
+    }
+
     if (isLoading) {
         return (
             <div className="flex items-center justify-center h-full">
@@ -96,7 +146,71 @@ export default function IndividualMapPage() {
                         )}
                     </div>
                 </div>
+                <Button
+                    variant="outline"
+                    onClick={() => setDeletingFloorPlan(true)}
+                    className="text-red-600 hover:text-red-700 border-red-300 hover:border-red-400"
+                >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Floor Plan
+                </Button>
             </div>
+
+            {error && (
+                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">{error}</div>
+            )}
+
+            {deletingFloorPlan && (
+                <Card className="border-red-500 bg-red-50">
+                    <CardContent className="pt-6 space-y-4">
+                        <p className="text-sm text-zinc-700 font-semibold">
+                            Are you sure you want to delete this floor plan?
+                        </p>
+                        <p className="text-sm text-zinc-600">
+                            Note: You must delete all rooms first before you can delete this floor plan.
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={handleDeleteFloorPlan}
+                                disabled={deleting}
+                                className="bg-red-600 hover:bg-red-700"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {deleting ? "Deleting..." : "Delete Floor Plan"}
+                            </Button>
+                            <Button variant="outline" onClick={() => setDeletingFloorPlan(false)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+
+            {deletingRoomId && (
+                <Card className="border-red-500 bg-red-50">
+                    <CardContent className="pt-6 space-y-4">
+                        <p className="text-sm text-zinc-700 font-semibold">
+                            Are you sure you want to delete this room?
+                        </p>
+                        <p className="text-sm text-zinc-600">
+                            Note: You must delete all items in this room first before you can delete it.
+                        </p>
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={() => handleDeleteRoom(deletingRoomId)}
+                                disabled={deleting}
+                                className="bg-red-600 hover:bg-red-700"
+                            >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {deleting ? "Deleting..." : "Delete Room"}
+                            </Button>
+                            <Button variant="outline" onClick={() => setDeletingRoomId(null)}>
+                                Cancel
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
 
             <div className="flex gap-4 flex-1 min-h-0">
                 <div className="relative flex-1 min-h-0 border rounded-xl overflow-hidden bg-zinc-100 shadow-inner">
@@ -120,14 +234,23 @@ export default function IndividualMapPage() {
                     ) : (
                         <div className="space-y-1">
                             {rooms.map((room) => (
-                                <Button
-                                    key={room.id}
-                                    variant={selectedRoom?.id === room.id ? "default" : "outline"}
-                                    className="w-full justify-start"
-                                    onClick={() => handleRoomClick(room)}
-                                >
-                                    {room.room_name}
-                                </Button>
+                                <div key={room.id} className="flex items-center gap-1">
+                                    <Button
+                                        variant={selectedRoom?.id === room.id ? "default" : "outline"}
+                                        className="flex-1 justify-start"
+                                        onClick={() => handleRoomClick(room)}
+                                    >
+                                        {room.room_name}
+                                    </Button>
+                                    <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        onClick={() => setDeletingRoomId(room.id)}
+                                        className="text-red-600 hover:text-red-700 flex-shrink-0"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                    </Button>
+                                </div>
                             ))}
                         </div>
                     )}

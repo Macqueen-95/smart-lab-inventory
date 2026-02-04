@@ -1141,19 +1141,33 @@ def swap_rfid_uids():
 @app.route("/api/floor-plans/<int:plan_id>", methods=["DELETE"])
 @login_required
 def delete_floor_plan(plan_id: int):
-    """Delete a floor plan and all associated rooms/items."""
+    """Delete a floor plan. All rooms must be deleted first."""
     uid = get_current_user_id()
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
     from auth import get_db_connection
+    from psycopg.rows import dict_row
     
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "message": "Database connection failed"}), 500
     
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
+            # Check if there are any rooms
+            cur.execute(
+                "SELECT COUNT(*) as count FROM rooms WHERE floor_plan_id = %s",
+                (plan_id,)
+            )
+            result = cur.fetchone()
+            if result and result["count"] > 0:
+                return jsonify({
+                    "success": False, 
+                    "message": f"Cannot delete floor plan. Please delete all {result['count']} room(s) first."
+                }), 400
+            
+            # Delete the floor plan
             cur.execute(
                 "DELETE FROM floor_plans WHERE id = %s AND user_id = %s",
                 (plan_id, uid)
@@ -1173,19 +1187,33 @@ def delete_floor_plan(plan_id: int):
 @app.route("/api/rooms/<int:room_id>", methods=["DELETE"])
 @login_required
 def delete_room(room_id: int):
-    """Delete a room and all associated items."""
+    """Delete a room. All items must be deleted first."""
     uid = get_current_user_id()
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
     from auth import get_db_connection
+    from psycopg.rows import dict_row
     
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "message": "Database connection failed"}), 500
     
     try:
-        with conn.cursor() as cur:
+        with conn.cursor(row_factory=dict_row) as cur:
+            # Check if there are any items
+            cur.execute(
+                "SELECT COUNT(*) as count FROM inventory_items WHERE room_id = %s",
+                (room_id,)
+            )
+            result = cur.fetchone()
+            if result and result["count"] > 0:
+                return jsonify({
+                    "success": False, 
+                    "message": f"Cannot delete room. Please delete all {result['count']} item(s) first."
+                }), 400
+            
+            # Delete the room
             cur.execute(
                 """
                 DELETE FROM rooms
