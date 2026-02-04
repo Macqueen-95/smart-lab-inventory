@@ -480,9 +480,3 @@ def get_latest_unassigned_rfid():
         return None
     finally:
         conn.close()
-
-    except Exception as e:
-        print(f"get_rfid_scan_logs error: {e}")
-        return []
-    finally:
-        conn.close()
