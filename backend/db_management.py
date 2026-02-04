@@ -57,16 +57,10 @@ def init_tables(conn=None):
                 );
             """)
             cur.execute("""
-                CREATE TABLE IF NOT EXISTS service_repair (
+                CREATE TABLE IF NOT EXISTS service (
                     id SERIAL PRIMARY KEY,
-                    item_id INTEGER NOT NULL REFERENCES inventory_items(id) ON DELETE CASCADE,
-                    rfid_uid VARCHAR(50),
-                    item_name VARCHAR(150),
-                    room_name VARCHAR(100),
-                    floor_title VARCHAR(150),
-                    out_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                    in_date TIMESTAMP,
-                    status VARCHAR(20) DEFAULT 'out',
+                    rfid_uid VARCHAR(50) NOT NULL REFERENCES inventory_items(rfid_uid) ON DELETE CASCADE,
+                    out_datetime TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)

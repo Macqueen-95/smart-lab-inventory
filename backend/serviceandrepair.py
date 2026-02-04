@@ -30,29 +30,39 @@ def send_item_out_for_service(item_id: int, rfid_uid: str):
                 return None
             
             # Check if already out for service
-            cur.execute("""
-                SELECT id FROM service_repair 
-                WHERE item_id = %s AND status = 'out'
-            """, (item_id,))
+            cur.execute(
+                """
+                SELECT id FROM service 
+                WHERE rfid_uid = %s
+                """,
+                (item['rfid_uid'],),
+            )
             existing = cur.fetchone()
             
             if existing:
                 return {"error": "Item already out for service"}
             
             # Insert service record
-            cur.execute("""
-                INSERT INTO service_repair 
-                (item_id, rfid_uid, item_name, room_name, floor_title, status)
-                VALUES (%s, %s, %s, %s, %s, 'out')
-                RETURNING id, item_id, rfid_uid, item_name, room_name, floor_title, out_date, status
-            """, (
-                item_id,
-                item['rfid_uid'],
-                item['item_name'],
-                item['room_name'],
-                item['floor_title']
-            ))
-            service_record = dict(cur.fetchone())
+            cur.execute(
+                """
+                INSERT INTO service (rfid_uid)
+                VALUES (%s)
+                RETURNING id, rfid_uid, out_datetime
+                """,
+                (item['rfid_uid'],),
+            )
+            inserted = cur.fetchone()
+
+            service_record = {
+                "id": inserted["id"],
+                "item_id": item_id,
+                "rfid_uid": inserted["rfid_uid"],
+                "item_name": item["item_name"],
+                "room_name": item["room_name"],
+                "floor_title": item["floor_title"],
+                "out_date": inserted["out_datetime"],
+                "status": "out",
+            }
             
             # Log the action
             cur.execute("""
@@ -80,45 +90,63 @@ def send_item_out_for_service(item_id: int, rfid_uid: str):
 
 
 def receive_item_from_service(item_id: int):
-    """Mark an item as returned from service. Returns True on success."""
+    """Mark an item as returned from service. Deletes active service row."""
     conn = get_db_connection()
     if not conn:
         return False
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            # Get the service record
-            cur.execute("""
-                SELECT s.*, i.rfid_uid, i.item_name
-                FROM service_repair s
-                JOIN inventory_items i ON s.item_id = i.id
-                WHERE s.item_id = %s AND s.status = 'out'
-                ORDER BY s.out_date DESC
-                LIMIT 1
-            """, (item_id,))
+            # Get item details and service record by RFID
+            cur.execute(
+                """
+                SELECT i.rfid_uid, i.item_name, r.room_name
+                FROM inventory_items i
+                LEFT JOIN rooms r ON i.room_id = r.id
+                WHERE i.id = %s
+                """,
+                (item_id,),
+            )
+            item = cur.fetchone()
+
+            if not item:
+                return False
+
+            cur.execute(
+                """
+                SELECT id FROM service
+                WHERE rfid_uid = %s
+                """,
+                (item["rfid_uid"],),
+            )
             service_record = cur.fetchone()
             
             if not service_record:
                 return False
             
-            # Update service record
-            cur.execute("""
-                UPDATE service_repair 
-                SET in_date = CURRENT_TIMESTAMP, status = 'in'
+            # Delete from service table (item returned)
+            cur.execute(
+                """
+                DELETE FROM service
                 WHERE id = %s
-            """, (service_record['id'],))
+                """,
+                (service_record["id"],),
+            )
             
             # Log the return
-            cur.execute("""
+            cur.execute(
+                """
                 INSERT INTO rfid_scan_logs 
                 (rfid_uid, item_name, room, scanner_id, scan_status)
                 VALUES (%s, %s, %s, %s, %s)
-            """, (
-                service_record['rfid_uid'],
-                service_record['item_name'],
-                service_record['room_name'],
-                'SERVICE_IN',
-                'RETURNED_FROM_SERVICE'
-            ))
+                """,
+                (
+                    item["rfid_uid"],
+                    item["item_name"],
+                    item["room_name"],
+                    "SERVICE_IN",
+                    "RETURNED_FROM_SERVICE",
+                ),
+            )
             
             conn.commit()
             return True
@@ -139,14 +167,24 @@ def get_items_out_for_service():
         return []
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute("""
-                SELECT 
-                    id, item_id, rfid_uid, item_name, room_name, floor_title,
-                    out_date, status
-                FROM service_repair
-                WHERE status = 'out'
-                ORDER BY out_date DESC
-            """)
+            cur.execute(
+                """
+                SELECT
+                    s.id,
+                    i.id AS item_id,
+                    s.rfid_uid,
+                    i.item_name,
+                    r.room_name,
+                    f.floor_title,
+                    s.out_datetime AS out_date,
+                    'out' AS status
+                FROM service s
+                LEFT JOIN inventory_items i ON s.rfid_uid = i.rfid_uid
+                LEFT JOIN rooms r ON i.room_id = r.id
+                LEFT JOIN floor_plans f ON r.floor_plan_id = f.id
+                ORDER BY s.out_datetime DESC
+                """
+            )
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"get_items_out_for_service error: {e}")
@@ -157,19 +195,32 @@ def get_items_out_for_service():
 
 
 def get_all_service_history():
-    """Get all service history (both out and returned)."""
+    """Get service history from logs (out and returned)."""
     conn = get_db_connection()
     if not conn:
         return []
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute("""
-                SELECT 
-                    id, item_id, rfid_uid, item_name, room_name, floor_title,
-                    out_date, in_date, status
-                FROM service_repair
-                ORDER BY out_date DESC
-            """)
+            cur.execute(
+                """
+                SELECT
+                    l.id,
+                    i.id AS item_id,
+                    l.rfid_uid,
+                    i.item_name,
+                    r.room_name,
+                    f.floor_title,
+                    l.scanned_at AS out_date,
+                    NULL AS in_date,
+                    l.scan_status AS status
+                FROM rfid_scan_logs l
+                LEFT JOIN inventory_items i ON l.rfid_uid = i.rfid_uid
+                LEFT JOIN rooms r ON i.room_id = r.id
+                LEFT JOIN floor_plans f ON r.floor_plan_id = f.id
+                WHERE l.scan_status IN ('OUT_FOR_SERVICE', 'RETURNED_FROM_SERVICE')
+                ORDER BY l.scanned_at DESC
+                """
+            )
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"get_all_service_history error: {e}")
