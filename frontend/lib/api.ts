@@ -122,6 +122,7 @@ export interface InventoryItem {
   item_name: string
   item_count: number
   item_icon_url: string | null
+  rfid_uid?: string | null
   room_id: number
   created_at: string
 }
@@ -182,6 +183,44 @@ export const itemsAPI = {
     const res = await api.patch<{ success: boolean; item: InventoryItem }>(`/items/${itemId}/icon`, {
       room_id: roomId,
       item_icon_url,
+    })
+    return res.data
+  },
+  assignRfid: async (itemId: number, rfid_uid: string) => {
+    const res = await api.post<{ success: boolean; message: string; item?: InventoryItem }>(
+      `/items/${itemId}/assign-rfid`,
+      { rfid_uid }
+    )
+    return res.data
+  },
+}
+
+// ---- RFID Management ----
+
+export interface RFIDScanLog {
+  id: number
+  rfid_uid: string
+  item_name: string | null
+  room: string | null
+  scanner_id: string
+  scan_status: string
+  scanned_at: string
+}
+
+export const rfidAPI = {
+  scan: async (rfid_uid: string, scanner_id: string) => {
+    const res = await api.post<{
+      success: boolean
+      status: string
+      message: string
+      item?: InventoryItem | null
+      rfid_uid: string
+    }>("/rfid/scan", { rfid_uid, scanner_id })
+    return res.data
+  },
+  getScanLogs: async (limit: number = 100) => {
+    const res = await api.get<{ success: boolean; logs: RFIDScanLog[] }>("/rfid/scan-logs", {
+      params: { limit },
     })
     return res.data
   },

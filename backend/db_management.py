@@ -42,7 +42,19 @@ def init_tables(conn=None):
                     item_name VARCHAR(150) NOT NULL,
                     item_count INTEGER DEFAULT 1,
                     item_icon_url TEXT,
+                    rfid_uid VARCHAR(50) UNIQUE,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS rfid_scan_logs (
+                    id SERIAL PRIMARY KEY,
+                    rfid_uid VARCHAR(50),
+                    item_name VARCHAR(150),
+                    room VARCHAR(100),
+                    scanner_id VARCHAR(50),
+                    scan_status VARCHAR(20),
+                    scanned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 );
             """)
             conn.commit()
@@ -306,5 +318,138 @@ def get_inventory_item_by_id(item_id: int, user_id: int):
     except Exception as e:
         print(f"get_inventory_item_by_id error: {e}")
         return None
+    finally:
+        conn.close()
+
+# ---- RFID Management ----
+
+def assign_rfid_to_item(item_id: int, rfid_uid: str, user_id: int):
+    """
+    Assign an RFID UID to an inventory item.
+    Returns: {"success": bool, "message": str, "item": dict or None}
+    """
+    conn = get_db_connection()
+    if not conn:
+        return {"success": False, "message": "Database connection failed"}
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            # Check if RFID UID already exists in the database
+            cur.execute("SELECT id, item_name FROM inventory_items WHERE rfid_uid = %s", (rfid_uid,))
+            existing = cur.fetchone()
+            if existing:
+                return {
+                    "success": False,
+                    "message": f"RFID UID already assigned to item: {existing['item_name']}"
+                }
+            
+            # Verify the item belongs to the user
+            cur.execute(
+                """SELECT i.id, i.item_name, i.item_count, i.item_icon_url, i.room_id, i.created_at
+                   FROM inventory_items i
+                   JOIN rooms r ON r.id = i.room_id 
+                   WHERE i.id = %s AND r.user_id = %s""",
+                (item_id, user_id),
+            )
+            item = cur.fetchone()
+            if not item:
+                return {"success": False, "message": "Item not found or unauthorized"}
+            
+            # Assign RFID UID to item
+            cur.execute(
+                "UPDATE inventory_items SET rfid_uid = %s WHERE id = %s",
+                (rfid_uid, item_id),
+            )
+            conn.commit()
+            
+            # Return updated item
+            return {
+                "success": True,
+                "message": f"RFID UID assigned to {item['item_name']}",
+                "item": dict(item)
+            }
+    except Exception as e:
+        print(f"assign_rfid_to_item error: {e}")
+        return {"success": False, "message": f"Error assigning RFID: {str(e)}"}
+    finally:
+        conn.close()
+
+
+def get_item_by_rfid(rfid_uid: str):
+    """
+    Get item details by RFID UID.
+    Returns: dict with item, room name, or None if not found
+    """
+    conn = get_db_connection()
+    if not conn:
+        return None
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT i.id, i.item_name, i.item_count, i.item_icon_url, i.room_id, 
+                          i.rfid_uid, r.room_name
+                   FROM inventory_items i
+                   JOIN rooms r ON r.id = i.room_id
+                   WHERE i.rfid_uid = %s""",
+                (rfid_uid,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        print(f"get_item_by_rfid error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def log_rfid_scan(rfid_uid: str, scanner_id: str, scan_status: str, item_name: str = None, room: str = None):
+    """
+    Log an RFID scan event.
+    scan_status: "OK" or "UNKNOWN"
+    Returns: bool indicating success
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False
+    
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """INSERT INTO rfid_scan_logs (rfid_uid, scanner_id, scan_status, item_name, room)
+                   VALUES (%s, %s, %s, %s, %s)""",
+                (rfid_uid, scanner_id, scan_status, item_name, room),
+            )
+            conn.commit()
+            return True
+    except Exception as e:
+        print(f"log_rfid_scan error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def get_rfid_scan_logs(user_id: int, limit: int = 100):
+    """
+    Get RFID scan logs (all scans, not user-scoped for display purposes).
+    Returns: list of scan log dicts
+    """
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT id, rfid_uid, scanner_id, scan_status, item_name, room, scanned_at
+                   FROM rfid_scan_logs
+                   ORDER BY scanned_at DESC
+                   LIMIT %s""",
+                (limit,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"get_rfid_scan_logs error: {e}")
+        return []
     finally:
         conn.close()

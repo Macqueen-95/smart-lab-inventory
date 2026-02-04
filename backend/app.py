@@ -19,7 +19,9 @@ from db_management import (
     get_inventory_items_by_room,
     update_inventory_item_icon,
     get_inventory_item_by_id,
+    get_rfid_scan_logs,
 )
+from rfid_uid import process_rfid_scan, assign_rfid_uid_to_item
 import os
 from functools import wraps
 
@@ -332,7 +334,65 @@ def api_update_item_icon(item_id):
     return jsonify({"success": True, "item": item}), 200
 
 
-if __name__ == "__main__":
+# ---- RFID Management ----
+
+@app.route("/api/items/<int:item_id>/assign-rfid", methods=["POST"])
+@login_required
+def api_assign_rfid_to_item(item_id):
+    """Assign an RFID UID to an inventory item. Body: rfid_uid."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    data = request.get_json() or {}
+    rfid_uid = (data.get("rfid_uid") or "").strip()
+    
+    if not rfid_uid:
+        return jsonify({"success": False, "message": "rfid_uid is required"}), 400
+    
+    result = assign_rfid_uid_to_item(item_id, rfid_uid, uid)
+    
+    if result["success"]:
+        return jsonify(result), 200
+    else:
+        return jsonify(result), 400
+
+
+@app.route("/api/rfid/scan", methods=["POST"])
+def api_process_rfid_scan():
+    """
+    Process an RFID scan from a scanner device.
+    Body: { "rfid_uid": "...", "scanner_id": "..." }
+    """
+    data = request.get_json() or {}
+    rfid_uid = (data.get("rfid_uid") or "").strip()
+    scanner_id = (data.get("scanner_id") or "").strip()
+    
+    if not rfid_uid or not scanner_id:
+        return jsonify({
+            "success": False,
+            "message": "rfid_uid and scanner_id are required"
+        }), 400
+    
+    result = process_rfid_scan(rfid_uid, scanner_id)
+    return jsonify(result), 200
+
+
+@app.route("/api/rfid/scan-logs", methods=["GET"])
+@login_required
+def api_get_rfid_scan_logs():
+    """Get RFID scan logs."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    limit = request.args.get("limit", 100, type=int)
+    logs = get_rfid_scan_logs(uid, limit)
+    
+    return jsonify({"success": True, "logs": logs}), 200
+
+
+
     print("=" * 50)
     print("App starting...")
     

@@ -1,116 +1,212 @@
 "use client"
 
-import { useState } from "react"
-import { Search, RotateCcw, Monitor, FileText, Bell, Network } from "lucide-react"
-
-// Mock Data matching the legacy format
-const legacyLogs = Array.from({ length: 50 }).map((_, i) => ({
-    id: i,
-    date: "Thu Jan 13 08:39:07 PST 2011",
-    source: `managed_pn_0_${i % 5}`,
-    severity: i % 3 === 0 ? "WARN" : i % 5 === 0 ? "ERROR" : "INFO",
-    message: `Client timer task failed with fatal status ----- Throwable: ----- java.lang.NullPointerException at oracle.axia.wcp.sip.engine.server.SipSessionImpl.receiveFinalResponse(SipSessionImpl.java:1067)`
-}))
+import { useState, useEffect } from "react"
+import { Search, RefreshCw, RotateCcw } from "lucide-react"
+import { rfidAPI, type RFIDScanLog } from "@/lib/api"
+import { Button } from "@/components/ui/Button"
+import { Input } from "@/components/ui/Input"
 
 export default function LogsPage() {
-    const [activeTab, setActiveTab] = useState("Log")
+    const [scanLogs, setScanLogs] = useState<RFIDScanLog[]>([])
+    const [searchQuery, setSearchQuery] = useState("")
+    const [isLoading, setIsLoading] = useState(true)
+    const [error, setError] = useState<string | null>(null)
+    const [filterStatus, setFilterStatus] = useState<"all" | "OK" | "UNKNOWN">("all")
+
+    const loadLogs = async () => {
+        setIsLoading(true)
+        setError(null)
+        try {
+            const result = await rfidAPI.getScanLogs(500)
+            if (result.success && result.logs) {
+                setScanLogs(result.logs)
+            } else {
+                setError("Failed to load logs")
+            }
+        } catch (e) {
+            setError(e instanceof Error ? e.message : "Failed to load logs")
+        } finally {
+            setIsLoading(false)
+        }
+    }
+
+    useEffect(() => {
+        loadLogs()
+        // Auto-refresh every 10 seconds
+        const interval = setInterval(loadLogs, 10000)
+        return () => clearInterval(interval)
+    }, [])
+
+    const filteredLogs = scanLogs.filter((log) => {
+        if (filterStatus !== "all" && log.scan_status !== filterStatus) return false
+        if (!searchQuery.trim()) return true
+        const q = searchQuery.toLowerCase()
+        return (
+            log.rfid_uid.toLowerCase().includes(q) ||
+            (log.item_name?.toLowerCase().includes(q)) ||
+            (log.room?.toLowerCase().includes(q)) ||
+            log.scanner_id.toLowerCase().includes(q)
+        )
+    })
+
+    const formatDate = (dateString: string) => {
+        const date = new Date(dateString)
+        return date.toLocaleString()
+    }
 
     return (
         <div className="flex flex-col h-full bg-white text-black font-sans text-sm">
-            {/* Legacy Toolbar / Tabs */}
-            <div className="flex items-end border-b border-gray-400 bg-gradient-to-b from-white to-gray-100 px-2 pt-2 gap-1">
-                {[
-                    { name: "System", icon: Monitor },
-                    { name: "Log", icon: FileText },
-                    { name: "Alarms", icon: Bell },
-                    { name: "Network Configuration", icon: Network },
-                ].map((tab) => (
-                    <button
-                        key={tab.name}
-                        onClick={() => setActiveTab(tab.name)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-t-md border-t border-l border-r border-gray-400 text-xs font-medium relative top-[1px] ${activeTab === tab.name
-                                ? "bg-white z-10 font-bold"
-                                : "bg-gray-200 text-gray-600 hover:bg-gray-100"
-                            }`}
-                    >
-                        {tab.icon && <tab.icon className="w-3.5 h-3.5" />}
-                        {tab.name}
-                    </button>
-                ))}
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-gray-300 bg-gray-50">
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h2 className="text-2xl font-bold text-black">RFID Scan Logs</h2>
+                        <p className="text-gray-600 text-sm">Real-time RFID scanning activity</p>
+                    </div>
+                    <Button onClick={loadLogs} variant="outline" size="sm" disabled={isLoading}>
+                        <RefreshCw className="h-4 w-4 mr-2" />
+                        {isLoading ? "Loading..." : "Refresh"}
+                    </Button>
+                </div>
             </div>
 
-            {/* Filter Area */}
-            <div className="p-3 border-b border-gray-300 bg-[#f0f0f0] space-y-3">
+            {/* Filters */}
+            <div className="p-4 border-b border-gray-300 bg-gray-50 space-y-3">
                 <div className="flex items-center gap-2">
-                    <label className="font-bold text-xs w-14">Search:</label>
+                    <label className="font-bold text-xs w-20">Search:</label>
                     <div className="flex-1 flex gap-2">
-                        <input
-                            type="text"
-                            className="flex-1 border border-gray-400 p-1 px-2 text-sm bg-white focus:outline-none focus:border-blue-500 h-7"
-                        />
-                        <button className="px-4 py-0.5 border border-gray-400 bg-gray-100 hover:bg-gray-200 text-xs shadow-sm active:translate-y-[1px]">
-                            Update
-                        </button>
+                        <div className="flex-1 relative">
+                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-gray-500" />
+                            <Input
+                                type="text"
+                                className="pl-9 border-gray-400 h-8"
+                                placeholder="Search by UID, item name, room, or scanner..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex gap-6 pl-[64px]">
-                    {[
-                        "Case sensitive",
-                        "Exact search",
-                        'Allow wildcards ("*" and "?") in search',
-                        "Run search continuously"
-                    ].map((label) => (
-                        <label key={label} className="flex items-center gap-1.5 text-xs select-none">
-                            <input type="checkbox" className="w-3.5 h-3.5 border-gray-400 rounded-none" />
-                            {label}
-                        </label>
-                    ))}
+                <div className="flex gap-4 pl-[88px]">
+                    <label className="flex items-center gap-1.5 text-xs select-none">
+                        <input
+                            type="radio"
+                            name="status"
+                            value="all"
+                            checked={filterStatus === "all"}
+                            onChange={(e) => setFilterStatus(e.target.value as "all")}
+                            className="w-3.5 h-3.5"
+                        />
+                        All
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs select-none">
+                        <input
+                            type="radio"
+                            name="status"
+                            value="OK"
+                            checked={filterStatus === "OK"}
+                            onChange={(e) => setFilterStatus(e.target.value as "all" | "OK" | "UNKNOWN")}
+                            className="w-3.5 h-3.5"
+                        />
+                        Found (OK)
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs select-none">
+                        <input
+                            type="radio"
+                            name="status"
+                            value="UNKNOWN"
+                            checked={filterStatus === "UNKNOWN"}
+                            onChange={(e) => setFilterStatus(e.target.value as "all" | "OK" | "UNKNOWN")}
+                            className="w-3.5 h-3.5"
+                        />
+                        Unknown
+                    </label>
                 </div>
             </div>
 
-            {/* Pagination / Status Bar */}
-            <div className="flex justify-end gap-2 px-4 py-1 text-xs text-blue-700 bg-white border-b border-gray-200">
-                <span className="text-gray-500 hover:underline cursor-pointer">previous</span>
-                <span className="text-black font-medium">Results 1 of 100</span>
-                <span className="hover:underline cursor-pointer">next</span>
+            {/* Error Message */}
+            {error && (
+                <div className="px-4 py-2 bg-red-50 border-b border-red-200 text-red-700 text-sm">
+                    {error}
+                </div>
+            )}
+
+            {/* Summary Stats */}
+            <div className="px-4 py-2 bg-white border-b border-gray-200 flex justify-between text-xs text-gray-600">
+                <span>
+                    Results: <span className="font-bold">{filteredLogs.length}</span> of{" "}
+                    <span className="font-bold">{scanLogs.length}</span>
+                </span>
+                <span>
+                    {scanLogs.filter((l) => l.scan_status === "OK").length} found,{" "}
+                    {scanLogs.filter((l) => l.scan_status === "UNKNOWN").length} unknown
+                </span>
             </div>
 
             {/* Data Table */}
             <div className="flex-1 overflow-auto bg-white">
-                <table className="w-full border-collapse text-xs font-mono">
-                    <thead className="bg-[#e0e0e0] sticky top-0 z-10">
-                        <tr className="divide-x divide-gray-300 border-b border-gray-300">
-                            {[
-                                { title: "Date", w: "min-w-[180px]" },
-                                { title: "Source", w: "w-[120px]" },
-                                { title: "Severity", w: "w-[80px]" },
-                                { title: "Message", w: "w-auto" }
-                            ].map((col) => (
-                                <th key={col.title} className={`text-left px-2 py-1 font-semibold text-gray-700 ${col.w} select-none active:bg-gray-300`}>
-                                    {col.title}
+                {isLoading && scanLogs.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">Loading logs...</div>
+                ) : filteredLogs.length === 0 ? (
+                    <div className="p-8 text-center text-gray-500">No scan logs found</div>
+                ) : (
+                    <table className="w-full border-collapse text-xs font-mono">
+                        <thead className="bg-gray-200 sticky top-0 z-10">
+                            <tr className="divide-x divide-gray-300 border-b border-gray-300">
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[140px]">
+                                    Scanned At
                                 </th>
-                            ))}
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                        {legacyLogs.map((log) => (
-                            <tr key={log.id} className="hover:bg-blue-50 divide-x divide-gray-200">
-                                <td className="px-2 py-0.5 whitespace-nowrap text-gray-600">{log.date}</td>
-                                <td className="px-2 py-0.5 whitespace-nowrap">{log.source}</td>
-                                <td className={`px-2 py-0.5 whitespace-nowrap font-bold ${log.severity === 'ERROR' ? 'text-red-700' :
-                                        log.severity === 'WARN' ? 'text-orange-700' : 'text-blue-700'
-                                    }`}>{log.severity}</td>
-                                <td className="px-2 py-0.5 whitespace-nowrap max-w-0 truncate text-gray-800" title={log.message}>
-                                    {log.message}
-                                </td>
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 min-w-[140px]">
+                                    RFID UID
+                                </th>
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[100px]">
+                                    Status
+                                </th>
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[120px]">
+                                    Item Name
+                                </th>
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[100px]">
+                                    Room
+                                </th>
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[100px]">
+                                    Scanner ID
+                                </th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
+                        </thead>
+                        <tbody className="divide-y divide-gray-200">
+                            {filteredLogs.map((log) => (
+                                <tr key={log.id} className="hover:bg-blue-50 divide-x divide-gray-200">
+                                    <td className="px-3 py-1 whitespace-nowrap text-gray-600">
+                                        {formatDate(log.scanned_at)}
+                                    </td>
+                                    <td className="px-3 py-1 whitespace-nowrap font-semibold text-gray-800">
+                                        {log.rfid_uid}
+                                    </td>
+                                    <td className={`px-3 py-1 whitespace-nowrap font-bold ${
+                                        log.scan_status === "OK"
+                                            ? "text-green-700 bg-green-50"
+                                            : "text-orange-700 bg-orange-50"
+                                    }`}>
+                                        {log.scan_status}
+                                    </td>
+                                    <td className="px-3 py-1 whitespace-nowrap max-w-[120px] truncate text-gray-800"
+                                        title={log.item_name || "Unknown"}>
+                                        {log.item_name || "—"}
+                                    </td>
+                                    <td className="px-3 py-1 whitespace-nowrap max-w-[100px] truncate text-gray-800"
+                                        title={log.room || "Unknown"}>
+                                        {log.room || "—"}
+                                    </td>
+                                    <td className="px-3 py-1 whitespace-nowrap text-gray-700">
+                                        {log.scanner_id}
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                )}
             </div>
-
-            {/* Scrollbar Mock (Optional visual cue if needed, but browser default is fine) */}
         </div>
     )
 }
