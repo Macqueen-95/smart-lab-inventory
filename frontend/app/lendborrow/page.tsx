@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { lendBorrowAPI } from "@/lib/api"
+import { lendBorrowAPI, rfidAPI } from "@/lib/api"
 import { XCircle, History, RefreshCw, Trash2, Check } from "lucide-react"
 
-type ScanPhase = "waiting-item" | "items-listed" | "waiting-user" | "completed"
+type ScanPhase = "waiting-item" | "items-listed" | "waiting-user"
 
 export default function BorrowPage() {
     const [scanPhase, setScanPhase] = useState<ScanPhase>("waiting-item")
@@ -17,22 +17,18 @@ export default function BorrowPage() {
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState<{ type: "success" | "error" | "info", text: string } | null>(null)
     const [showHistory, setShowHistory] = useState(false)
-    const [rfidScanListening, setRfidScanListening] = useState(false)
+    const [itemScanListening, setItemScanListening] = useState(false)
     const [userScanListening, setUserScanListening] = useState(false)
 
-    // Poll for new RFID scans when in item scanning mode
+    // Poll for item scans
     useEffect(() => {
-        if (!rfidScanListening || scanPhase !== "waiting-item") return
+        if (!itemScanListening || scanPhase !== "waiting-item") return
 
         const pollForScan = async () => {
             try {
-                const result = await fetch(`/api/rfid/latest-scan`, {
-                    credentials: "include",
-                }).then(r => r.json())
-
+                const result = await rfidAPI.getLatestUnassigned()
                 if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfidUid) {
                     setScannedRfidUid(result.rfid_uid)
-                    // Auto-add to items list
                     const newItem = {
                         id: Date.now(),
                         rfid_uid: result.rfid_uid,
@@ -43,39 +39,32 @@ export default function BorrowPage() {
                     setMessage({ type: "info", text: `Item scanned: ${result.rfid_uid}` })
                 }
             } catch (e) {
-                // Ignore errors during polling
+                // Ignore
             }
         }
 
-        // Poll every 100ms, same as manage items
         const interval = setInterval(pollForScan, 100)
-        pollForScan() // Check immediately
-
+        pollForScan()
         return () => clearInterval(interval)
-    }, [rfidScanListening, scanPhase, scannedRfidUid, scannedItems])
+    }, [itemScanListening, scanPhase, scannedRfidUid, scannedItems])
 
-    // Poll for user RFID scans when in user scanning mode
+    // Poll for user scans
     useEffect(() => {
         if (!userScanListening || scanPhase !== "waiting-user") return
 
         const pollForScan = async () => {
             try {
-                const result = await fetch(`/api/rfid/latest-scan`, {
-                    credentials: "include",
-                }).then(r => r.json())
-
+                const result = await rfidAPI.getLatestUnassigned()
                 if (result.success && result.rfid_uid && result.rfid_uid !== userRfid) {
                     setUserRfid(result.rfid_uid)
                 }
             } catch (e) {
-                // Ignore errors during polling
+                // Ignore
             }
         }
 
-        // Poll every 100ms
         const interval = setInterval(pollForScan, 100)
-        pollForScan() // Check immediately
-
+        pollForScan()
         return () => clearInterval(interval)
     }, [userScanListening, scanPhase, userRfid])
 
@@ -96,12 +85,12 @@ export default function BorrowPage() {
 
     const handleStartItemScan = () => {
         setScannedRfidUid("")
-        setRfidScanListening(true)
+        setItemScanListening(true)
     }
 
     const handleExitItemScan = () => {
         if (scannedItems.length > 0) {
-            setRfidScanListening(false)
+            setItemScanListening(false)
             setScanPhase("items-listed")
         }
     }
@@ -112,7 +101,7 @@ export default function BorrowPage() {
 
     const handleStartUserScan = () => {
         setUserRfid("")
-        setRfidScanListening(false)
+        setItemScanListening(false)
         setUserScanListening(true)
         setScanPhase("waiting-user")
     }
@@ -122,7 +111,6 @@ export default function BorrowPage() {
             setMessage({ type: "error", text: "Please scan at least one item" })
             return
         }
-
         if (!userRfid) {
             setMessage({ type: "error", text: "Please scan user RFID" })
             return
@@ -144,7 +132,7 @@ export default function BorrowPage() {
             setUserRfid("")
             setScannedRfidUid("")
             setScanPhase("waiting-item")
-            setRfidScanListening(false)
+            setItemScanListening(false)
             setUserScanListening(false)
             loadActiveLentItems()
         } catch (err: any) {
@@ -177,7 +165,7 @@ export default function BorrowPage() {
         setScannedRfidUid("")
         setScanPhase("waiting-item")
         setMessage(null)
-        setRfidScanListening(false)
+        setItemScanListening(false)
         setUserScanListening(false)
     }
 
@@ -209,9 +197,7 @@ export default function BorrowPage() {
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Scanning Area */}
                 <div className="lg:col-span-2 space-y-6">
-                    {/* Phase 1: Wait for Item Scans */}
                     {scanPhase === "waiting-item" && (
                         <Card className="border-2 border-blue-200 bg-blue-50">
                             <CardHeader>
@@ -223,7 +209,6 @@ export default function BorrowPage() {
                             </CardHeader>
                             <CardContent>
                                 <div className="flex flex-col items-center justify-center py-12 space-y-6">
-                                    {/* Breathing Circle */}
                                     <div className="relative w-32 h-32">
                                         <div className="absolute inset-0 breathing-pulse rounded-full bg-blue-100"></div>
                                         <div className="absolute inset-0 flex items-center justify-center">
@@ -234,7 +219,7 @@ export default function BorrowPage() {
                                     </div>
                                     <div className="text-center">
                                         <p className="text-lg font-semibold text-blue-900">
-                                            {rfidScanListening ? "Listening for scans..." : "Ready to scan"}
+                                            {itemScanListening ? "Listening for scans..." : "Ready to scan"}
                                         </p>
                                         <p className="text-sm text-blue-700 mt-1">Items scanned: <span className="font-bold">{scannedItems.length}</span></p>
                                     </div>
@@ -243,7 +228,6 @@ export default function BorrowPage() {
                         </Card>
                     )}
 
-                    {/* Phase 2: Items Listed */}
                     {(scanPhase === "items-listed" || scanPhase === "waiting-user") && (
                         <Card className="border-2">
                             <CardHeader>
@@ -279,7 +263,6 @@ export default function BorrowPage() {
                         </Card>
                     )}
 
-                    {/* Phase 3: Waiting User Scan */}
                     {scanPhase === "waiting-user" && (
                         <Card className="border-2 border-green-200 bg-green-50">
                             <CardHeader>
@@ -287,11 +270,10 @@ export default function BorrowPage() {
                                     <span className="text-3xl">👤</span>
                                     Scan User ID
                                 </CardTitle>
-                                <CardDescription>Scan user's RFID badge or ID</CardDescription>
+                                <CardDescription>Scan user RFID badge or ID</CardDescription>
                             </CardHeader>
                             <CardContent>
                                 <div className="flex flex-col items-center justify-center py-12 space-y-6">
-                                    {/* Breathing Circle - Green */}
                                     <div className="relative w-32 h-32">
                                         <div className="absolute inset-0 breathing-pulse-green rounded-full bg-green-100"></div>
                                         <div className="absolute inset-0 flex items-center justify-center">
@@ -323,7 +305,6 @@ export default function BorrowPage() {
                         </Card>
                     )}
 
-                    {/* Action Buttons */}
                     <div className="flex gap-2 flex-wrap">
                         {scanPhase === "waiting-item" && (
                             <>
@@ -331,7 +312,7 @@ export default function BorrowPage() {
                                     onClick={handleStartItemScan}
                                     className="bg-blue-600 hover:bg-blue-700 text-white flex-1"
                                 >
-                                    {rfidScanListening ? "Scanning..." : "Start Scanning Items"}
+                                    {itemScanListening ? "Scanning..." : "Start Scanning Items"}
                                 </Button>
                                 {scannedItems.length > 0 && (
                                     <>
@@ -361,11 +342,7 @@ export default function BorrowPage() {
                                     Proceed to User Scan
                                 </Button>
                                 <Button 
-                                    onClick={() => {
-                                        setScanPhase("waiting-item")
-                                        setRfidScanListening(false)
-                                        setUserScanListening(false)
-                                    }}
+                                    onClick={() => setScanPhase("waiting-item")}
                                     variant="outline"
                                 >
                                     Scan More Items
@@ -402,10 +379,7 @@ export default function BorrowPage() {
 
                         {scanPhase === "waiting-user" && !userRfid && (
                             <Button 
-                                onClick={() => {
-                                    setUserScanListening(false)
-                                    setScanPhase("items-listed")
-                                }}
+                                onClick={() => setScanPhase("items-listed")}
                                 variant="outline"
                                 className="flex-1"
                             >
@@ -415,7 +389,6 @@ export default function BorrowPage() {
                     </div>
                 </div>
 
-                {/* Sidebar: Active Lent Items */}
                 <div>
                     <Card className="sticky top-4">
                         <CardHeader>
@@ -461,7 +434,6 @@ export default function BorrowPage() {
                 </div>
             </div>
 
-            {/* History Modal */}
             {showHistory && (
                 <Card className="bg-gray-50">
                     <CardHeader>
@@ -478,8 +450,7 @@ export default function BorrowPage() {
                     </CardHeader>
                     <CardContent>
                         <p className="text-zinc-500 text-sm">
-                            All lending/borrowing transactions are tracked with timestamps.
-                            Items returned are automatically removed from the "Currently Lent" list.
+                            All lending/borrowing transactions are tracked. Items returned are automatically removed.
                         </p>
                     </CardContent>
                 </Card>
