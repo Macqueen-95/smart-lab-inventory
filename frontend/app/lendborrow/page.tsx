@@ -26,7 +26,7 @@ export default function BorrowPage() {
 
         const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestUnassigned()
+                const result = await rfidAPI.getLatestScan()
                 if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfidUid) {
                     setScannedRfidUid(result.rfid_uid)
                     const newItem = {
@@ -46,7 +46,7 @@ export default function BorrowPage() {
         const interval = setInterval(pollForScan, 100)
         pollForScan()
         return () => clearInterval(interval)
-    }, [itemScanListening, scanPhase, scannedRfidUid, scannedItems])
+    }, [itemScanListening, scanPhase, scannedRfidUid])
 
     // Poll for user scans
     useEffect(() => {
@@ -54,7 +54,7 @@ export default function BorrowPage() {
 
         const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestUnassigned()
+                const result = await rfidAPI.getLatestScan()
                 if (result.success && result.rfid_uid && result.rfid_uid !== userRfid) {
                     setUserRfid(result.rfid_uid)
                 }
