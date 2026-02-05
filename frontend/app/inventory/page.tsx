@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { Button } from "@/components/ui/Button"
-import { Search, Package, MapPin, X, Wifi, CheckCircle2, AlertCircle, HelpCircle, XCircle } from "lucide-react"
+import { Search, Package, MapPin, X, Wifi } from "lucide-react"
 import { roomsAPI, itemsAPI, confidenceAPI, type Room, type InventoryItem, type ConfidenceScore } from "@/lib/api"
 
 type RoomWithCount = Room & { itemCount: number; itemTypes: number }
@@ -87,24 +87,17 @@ export default function InventoryPage() {
         if (!item.rfid_uid) return null
         const confidence = modalConfidence[item.rfid_uid]
         if (!confidence) return null
-        const { confidence: score, status } = confidence
+        const score = confidence.confidence
+        const pct = (score * 100).toFixed(0)
         const getBadgeClass = () => {
             if (score >= 0.7) return "bg-green-100 text-green-800 border-green-300"
             if (score >= 0.4) return "bg-blue-100 text-blue-800 border-blue-300"
             if (score >= 0.1) return "bg-yellow-100 text-yellow-800 border-yellow-300"
             return "bg-red-100 text-red-800 border-red-300"
         }
-        const getIcon = () => {
-            if (score >= 0.7) return <CheckCircle2 className="h-3 w-3" />
-            if (score >= 0.4) return <AlertCircle className="h-3 w-3" />
-            if (score >= 0.1) return <HelpCircle className="h-3 w-3" />
-            return <XCircle className="h-3 w-3" />
-        }
         return (
-            <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium ${getBadgeClass()}`}>
-                {getIcon()}
-                <span>{status}</span>
-                <span className="opacity-80">({(score * 100).toFixed(0)}%)</span>
+            <span className={`inline-flex items-center rounded border px-2 py-0.5 text-xs font-medium ${getBadgeClass()}`}>
+                Confidence: {pct}%
             </span>
         )
     }
