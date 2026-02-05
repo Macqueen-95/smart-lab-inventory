@@ -315,7 +315,7 @@ def get_inventory_items_by_room(room_id: int):
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
                 """SELECT 
-                    i.id, i.item_name, i.item_icon_url, i.rfid_uid, i.room_id, i.created_at,
+                    i.id, i.item_name, i.item_count, i.item_icon_url, i.rfid_uid, i.room_id, i.created_at,
                     (SELECT scanned_at FROM rfid_scan_logs 
                      WHERE rfid_uid = i.rfid_uid 
                      ORDER BY scanned_at DESC LIMIT 1) as last_scanned_at

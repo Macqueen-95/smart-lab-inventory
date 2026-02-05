@@ -5,8 +5,8 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Input } from "@/components/ui/Input"
 import { Button } from "@/components/ui/Button"
-import { Search, Package, MapPin, X, Wifi } from "lucide-react"
-import { roomsAPI, itemsAPI, type Room, type InventoryItem } from "@/lib/api"
+import { Search, Package, MapPin, X, Wifi, CheckCircle2, AlertCircle, HelpCircle, XCircle } from "lucide-react"
+import { roomsAPI, itemsAPI, confidenceAPI, type Room, type InventoryItem, type ConfidenceScore } from "@/lib/api"
 
 type RoomWithCount = Room & { itemCount: number; itemTypes: number }
 
@@ -17,6 +17,7 @@ export default function InventoryPage() {
     const [error, setError] = useState<string | null>(null)
     const [selectedRoomId, setSelectedRoomId] = useState<number | null>(null)
     const [modalItems, setModalItems] = useState<InventoryItem[]>([])
+    const [modalConfidence, setModalConfidence] = useState<Record<string, ConfidenceScore>>({})
     const [modalLoading, setModalLoading] = useState(false)
 
     useEffect(() => {
@@ -54,10 +55,17 @@ export default function InventoryPage() {
     const handleRoomClick = async (roomId: number) => {
         setSelectedRoomId(roomId)
         setModalLoading(true)
+        setModalConfidence({})
         try {
-            const res = await itemsAPI.listByRoom(roomId)
-            if (res.success && res.items) {
-                setModalItems(res.items)
+            const [itemsRes, confidenceRes] = await Promise.all([
+                itemsAPI.listByRoom(roomId),
+                confidenceAPI.getRoomItemsConfidence(roomId).catch(() => ({ success: false, confidence_scores: {} })),
+            ])
+            if (itemsRes.success && itemsRes.items) {
+                setModalItems(itemsRes.items)
+            }
+            if (confidenceRes.success && confidenceRes.confidence_scores) {
+                setModalConfidence(confidenceRes.confidence_scores)
             }
         } catch (e) {
             console.error("Failed to load items:", e)
@@ -74,6 +82,32 @@ export default function InventoryPage() {
             (room.room_description || "").toLowerCase().includes(q)
         )
     })
+
+    const getConfidenceBadge = (item: InventoryItem) => {
+        if (!item.rfid_uid) return null
+        const confidence = modalConfidence[item.rfid_uid]
+        if (!confidence) return null
+        const { confidence: score, status } = confidence
+        const getBadgeClass = () => {
+            if (score >= 0.7) return "bg-green-100 text-green-800 border-green-300"
+            if (score >= 0.4) return "bg-blue-100 text-blue-800 border-blue-300"
+            if (score >= 0.1) return "bg-yellow-100 text-yellow-800 border-yellow-300"
+            return "bg-red-100 text-red-800 border-red-300"
+        }
+        const getIcon = () => {
+            if (score >= 0.7) return <CheckCircle2 className="h-3 w-3" />
+            if (score >= 0.4) return <AlertCircle className="h-3 w-3" />
+            if (score >= 0.1) return <HelpCircle className="h-3 w-3" />
+            return <XCircle className="h-3 w-3" />
+        }
+        return (
+            <span className={`inline-flex items-center gap-1 rounded border px-2 py-0.5 text-xs font-medium ${getBadgeClass()}`}>
+                {getIcon()}
+                <span>{status}</span>
+                <span className="opacity-80">({(score * 100).toFixed(0)}%)</span>
+            </span>
+        )
+    }
 
     return (
         <div className="flex flex-col h-full space-y-6">
@@ -149,13 +183,13 @@ export default function InventoryPage() {
                 </div>
             )}
 
-            {/* Room Details Modal */}
+            {/* Room Details Modal - card design like manage-items */}
             {selectedRoomId && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <Card className="w-full max-w-2xl max-h-[80vh] overflow-y-auto">
-                        <CardHeader className="sticky top-0 bg-white border-b flex items-center justify-between">
-                            <div className="flex-1">
-                                <CardTitle>
+                    <Card className="w-full max-w-4xl max-h-[85vh] overflow-hidden flex flex-col">
+                        <CardHeader className="flex-shrink-0 bg-white border-b flex flex-row items-center justify-between gap-4">
+                            <div className="flex-1 min-w-0">
+                                <CardTitle className="text-xl">
                                     {rooms.find(r => r.id === selectedRoomId)?.room_name}
                                 </CardTitle>
                                 <CardDescription>
@@ -166,72 +200,62 @@ export default function InventoryPage() {
                                 variant="ghost"
                                 size="icon"
                                 onClick={() => setSelectedRoomId(null)}
+                                className="flex-shrink-0"
                             >
                                 <X className="h-4 w-4" />
                             </Button>
                         </CardHeader>
-                        <CardContent className="pt-6">
+                        <CardContent className="pt-6 overflow-y-auto flex-1">
                             {modalLoading ? (
-                                <p className="text-center text-zinc-500">Loading items...</p>
+                                <p className="text-center text-zinc-500 py-12">Loading items...</p>
                             ) : modalItems.length === 0 ? (
-                                <p className="text-center text-zinc-500">No items in this room</p>
+                                <p className="text-center text-zinc-500 py-12">No items in this room</p>
                             ) : (
-                                <div className="space-y-2">
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                                     {modalItems.map((item) => (
-                                        <div
-                                            key={item.id}
-                                            className="flex items-center gap-3 p-3 border rounded-lg hover:bg-zinc-50 transition-colors"
-                                        >
-                                            {/* Item Icon */}
-                                            <div className="w-12 h-12 rounded bg-zinc-100 flex items-center justify-center flex-shrink-0">
+                                        <Card key={item.id} className="overflow-hidden">
+                                            <div className="relative w-full h-32 bg-zinc-100 rounded-t-lg overflow-hidden flex items-center justify-center">
                                                 {item.item_icon_url ? (
                                                     <img
                                                         src={item.item_icon_url}
                                                         alt=""
-                                                        className="w-full h-full object-contain p-1"
+                                                        className="w-full h-full object-contain p-2"
                                                     />
                                                 ) : (
-                                                    <Package className="h-6 w-6 text-zinc-400" />
+                                                    <Package className="h-12 w-12 text-zinc-400" />
                                                 )}
                                             </div>
-                                            
-                                            {/* Item Details */}
-                                            <div className="flex-1 min-w-0">
-                                                <h4 className="font-medium text-black truncate">{item.item_name}</h4>
+                                            <CardHeader className="pb-2">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <CardTitle className="line-clamp-1 text-base">{item.item_name}</CardTitle>
+                                                    {getConfidenceBadge(item)}
+                                                </div>
                                                 {item.rfid_uid ? (
-                                                    <div className="flex items-center gap-1 text-xs text-blue-600 mt-0.5">
-                                                        <Wifi className="h-3 w-3" />
-                                                        <code className="font-mono">{item.rfid_uid}</code>
+                                                    <p className="text-xs text-green-600 font-mono mt-1">
+                                                        RFID: {item.rfid_uid}
+                                                    </p>
+                                                ) : (
+                                                    <p className="text-xs text-zinc-500 mt-1">No RFID assigned</p>
+                                                )}
+                                            </CardHeader>
+                                            <CardContent className="space-y-2 pt-0">
+                                                {(item.item_count != null && item.item_count !== undefined) && (
+                                                    <div className="flex items-center justify-between text-sm">
+                                                        <span className="text-zinc-600">Qty:</span>
+                                                        <span className="font-bold">{item.item_count}</span>
                                                     </div>
-                                                ) : (
-                                                    <p className="text-xs text-zinc-500 mt-0.5">No RFID assigned</p>
                                                 )}
-                                            </div>
-                                            
-                                            {/* Last Scanned */}
-                                            <div className="text-right flex-shrink-0">
-                                                {item.last_scanned_at ? (
-                                                    <>
-                                                        <p className="text-xs text-zinc-500">Last scanned</p>
-                                                        <p className="text-xs font-medium text-black">
-                                                            {new Date(item.last_scanned_at).toLocaleDateString('en-US', {
-                                                                month: 'short',
-                                                                day: 'numeric',
-                                                                year: 'numeric'
-                                                            })}
-                                                        </p>
-                                                        <p className="text-xs text-zinc-400">
-                                                            {new Date(item.last_scanned_at).toLocaleTimeString('en-US', {
-                                                                hour: '2-digit',
-                                                                minute: '2-digit'
-                                                            })}
-                                                        </p>
-                                                    </>
-                                                ) : (
-                                                    <p className="text-xs text-zinc-400">Never scanned</p>
+                                                {item.rfid_uid && modalConfidence[item.rfid_uid] && (
+                                                    <div className="text-xs text-zinc-500 border-t border-zinc-100 pt-2">
+                                                        {modalConfidence[item.rfid_uid].minutes_since_last_scan != null ? (
+                                                            <span>Last scan: {Math.round(modalConfidence[item.rfid_uid].minutes_since_last_scan!)} min ago</span>
+                                                        ) : (
+                                                            <span>No scans recorded</span>
+                                                        )}
+                                                    </div>
                                                 )}
-                                            </div>
-                                        </div>
+                                            </CardContent>
+                                        </Card>
                                     ))}
                                 </div>
                             )}

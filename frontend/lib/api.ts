@@ -129,6 +129,7 @@ export interface Room {
 export interface InventoryItem {
   id: number
   item_name: string
+  item_count?: number
   item_icon_url: string | null
   rfid_uid?: string | null
   room_id: number
