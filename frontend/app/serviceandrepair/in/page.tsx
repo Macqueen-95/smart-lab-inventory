@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { ArrowLeft, Wifi, CheckCircle2, X, AlertCircle, Package } from "lucide-react"
 import { serviceAPI, rfidAPI } from "@/lib/api"
+import { ScanningUI } from "@/components/ui/ScanningUI"
 
 type ServiceItem = {
     id?: number
@@ -25,23 +26,28 @@ export default function InFromServicePage() {
     const [isSaving, setIsSaving] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [success, setSuccess] = useState<string | null>(null)
+    const lastScanTimeRef = useRef<string | null>(null)
 
-    // Poll for RFID scans
+    // Poll for RFID scans (600ms with since parameter)
     useEffect(() => {
-        if (!isScanning) return
+        if (!isScanning) {
+            lastScanTimeRef.current = null
+            return
+        }
 
         const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestScan()
+                const result = await rfidAPI.getLatestScan(lastScanTimeRef.current ?? undefined)
                 if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfid) {
+                    if (result.scanned_at) lastScanTimeRef.current = result.scanned_at
                     setScannedRfid(result.rfid_uid)
                 }
-            } catch (e) {
+            } catch (_e) {
                 // Ignore polling errors
             }
         }
 
-        const interval = setInterval(pollForScan, 100)
+        const interval = setInterval(pollForScan, 600)
         pollForScan()
         return () => clearInterval(interval)
     }, [isScanning, scannedRfid])
@@ -139,7 +145,17 @@ export default function InFromServicePage() {
             )}
 
             {/* Scanner Card */}
-            <Card className="border-green-200 bg-green-50">
+            {isScanning && (
+                <ScanningUI
+                    isScanning={isScanning}
+                    scannedCount={cart.length}
+                    icon={<Wifi className="h-12 w-12" />}
+                    title="Scan Item RFID"
+                    description="Position item near scanner or enter UID manually"
+                    color="green"
+                />
+            )}
+            <Card className={isScanning ? "border-green-200 bg-green-50" : ""}>
                 <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                         <Wifi className="h-5 w-5 text-green-600" />
@@ -153,7 +169,10 @@ export default function InFromServicePage() {
                             placeholder="Scanning... or enter manually"
                             value={scannedRfid}
                             onChange={(e) => setScannedRfid(e.target.value)}
-                            onFocus={() => setIsScanning(true)}
+                            onFocus={() => {
+                                setIsScanning(true)
+                                lastScanTimeRef.current = null
+                            }}
                             onBlur={() => setTimeout(() => setIsScanning(false), 500)}
                             className="bg-white text-black text-lg font-mono"
                             autoFocus

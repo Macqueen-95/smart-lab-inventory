@@ -44,7 +44,7 @@ export default function LoginPage() {
         <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-gradient-to-br from-slate-100 to-slate-200">
             {/* Background Image */}
             <div 
-                className="absolute inset-0 z-0 opacity-40"
+                className="absolute inset-0 z-0"
                 style={{ 
                     backgroundImage: 'url(/login.png)',
                     backgroundSize: 'cover',
@@ -52,8 +52,8 @@ export default function LoginPage() {
                     backgroundRepeat: 'no-repeat',
                 }}
             />
-            {/* Dark overlay for contrast */}
-            <div className="absolute inset-0 bg-black/20 z-0" />
+            {/* Semi-transparent overlay for better contrast */}
+            <div className="absolute inset-0 bg-white/60 z-0" />
             
             <Card className="w-full max-w-md shadow-2xl relative z-10 bg-white border-2">
                 <CardHeader className="text-center">

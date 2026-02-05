@@ -1,12 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
 import { ArrowLeft, Plus, Search, X, Save, Upload, Package, Wifi, Edit2, Trash2, Check } from "lucide-react"
 import { roomsAPI, itemsAPI, uploadToBlob, rfidAPI, type Room, type InventoryItem } from "@/lib/api"
+import { ScanningUI } from "@/components/ui/ScanningUI"
 
 export default function ManageItemsPage() {
     const [rooms, setRooms] = useState<Room[]>([])
@@ -25,6 +26,7 @@ export default function ManageItemsPage() {
     const [editingItemId, setEditingItemId] = useState<number | null>(null)
     const [editingItemName, setEditingItemName] = useState("")
     const [deletingItemId, setDeletingItemId] = useState<number | null>(null)
+    const lastScanTimeRef = useRef<string | null>(null)
 
     useEffect(() => {
         let cancelled = false
@@ -134,34 +136,34 @@ export default function ManageItemsPage() {
         setScannedRfidUid("")
         setRfidScanListening(true)
         setError(null)
+        lastScanTimeRef.current = null
     }
 
     const handleCancelRfidScan = () => {
         setScanningItemId(null)
         setScannedRfidUid("")
         setRfidScanListening(false)
+        lastScanTimeRef.current = null
     }
 
-    // Poll for new RFID scans when in scanning mode
+    // Poll for new RFID scans when in scanning mode (600ms with since parameter)
     useEffect(() => {
         if (!rfidScanListening || scanningItemId === null) return
 
         const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestUnassigned()
+                const result = await rfidAPI.getLatestScan(lastScanTimeRef.current ?? undefined)
                 if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfidUid) {
+                    if (result.scanned_at) lastScanTimeRef.current = result.scanned_at
                     setScannedRfidUid(result.rfid_uid)
                 }
-            } catch (e) {
+            } catch (_e) {
                 // Ignore errors during polling
             }
         }
 
-        // Poll every 2 seconds
-        const interval = setInterval(pollForScan, 100)
-        // Also check immediately
+        const interval = setInterval(pollForScan, 600)
         pollForScan()
-
         return () => clearInterval(interval)
     }, [rfidScanListening, scanningItemId, scannedRfidUid])
 
@@ -394,40 +396,45 @@ export default function ManageItemsPage() {
                     )}
 
                     {scanningItemId && (
-                        <Card className="border-green-500">
-                            <CardHeader>
-                                <CardTitle>Scan RFID UID</CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                <p className="text-sm text-zinc-600">
-                                    Waiting for RFID scan. Present your item to the scanner or enter the UID manually.
-                                </p>
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium text-black">RFID UID</label>
-                                    <Input
-                                        autoFocus
-                                        value={scannedRfidUid}
-                                        onChange={(e) => setScannedRfidUid(e.target.value)}
-                                        className="bg-white text-black font-mono"
-                                        placeholder="RFID code will appear here or type manually..."
-                                    />
-                                </div>
-                                <div className="flex gap-2">
-                                    <Button
-                                        onClick={handleAssignRfid}
-                                        disabled={saving || !scannedRfidUid.trim()}
-                                        className="bg-green-600 hover:bg-green-700"
-                                    >
-                                        <Wifi className="h-4 w-4 mr-2" />
-                                        {saving ? "Assigning..." : "Assign RFID"}
-                                    </Button>
-                                    <Button variant="outline" onClick={handleCancelRfidScan}>
-                                        <X className="h-4 w-4 mr-2" />
-                                        Cancel
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
+                        <>
+                            <ScanningUI
+                                isScanning={rfidScanListening}
+                                icon={<Wifi className="h-12 w-12" />}
+                                title="Scan RFID UID"
+                                description="Present your item to the scanner or enter the UID manually"
+                                color="blue"
+                            />
+                            <Card className="border-green-500">
+                                <CardHeader>
+                                    <CardTitle>RFID UID</CardTitle>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    <div className="space-y-2">
+                                        <Input
+                                            autoFocus
+                                            value={scannedRfidUid}
+                                            onChange={(e) => setScannedRfidUid(e.target.value)}
+                                            className="bg-white text-black font-mono"
+                                            placeholder="RFID code will appear here or type manually..."
+                                        />
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            onClick={handleAssignRfid}
+                                            disabled={saving || !scannedRfidUid.trim()}
+                                            className="bg-green-600 hover:bg-green-700"
+                                        >
+                                            <Wifi className="h-4 w-4 mr-2" />
+                                            {saving ? "Assigning..." : "Assign RFID"}
+                                        </Button>
+                                        <Button variant="outline" onClick={handleCancelRfidScan}>
+                                            <X className="h-4 w-4 mr-2" />
+                                            Cancel
+                                        </Button>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </>
                     )}
 
                     {isLoadingItems ? (

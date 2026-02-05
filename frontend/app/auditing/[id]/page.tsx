@@ -49,7 +49,8 @@ export default function AuditDetailPage() {
     useEffect(() => {
         if (!audit?.started_at) return
         loadItems()
-        const interval = setInterval(loadItems, 100)
+        // Reduced from 100ms to 2000ms (2 seconds) to reduce server load
+        const interval = setInterval(loadItems, 2000)
         return () => clearInterval(interval)
     }, [audit?.started_at, audit?.scanner_id])
 

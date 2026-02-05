@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/Badge"
 import { profileAPI, rfidAPI, authAPI } from "@/lib/api"
 import { ArrowLeft, User, Lock, Radio, Camera, RefreshCw } from "lucide-react"
 import Link from "next/link"
+import { ScanningUI } from "@/components/ui/ScanningUI"
 
 export default function ProfilePage() {
     const [activeTab, setActiveTab] = useState<"info" | "password" | "rfid">("info")
@@ -49,23 +50,31 @@ export default function ProfilePage() {
         }
     }
 
-    // RFID Polling
-    useEffect(() => {
-        if (!isScanning) return
+    const lastScanTimeRef = useRef<string | null>(null)
 
-        const interval = setInterval(async () => {
+    // RFID Polling (600ms with since parameter for efficiency)
+    useEffect(() => {
+        if (!isScanning) {
+            lastScanTimeRef.current = null
+            return
+        }
+
+        const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestScan()
-                if (result.success && result.rfid_uid) {
+                const result = await rfidAPI.getLatestScan(lastScanTimeRef.current ?? undefined)
+                if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfid) {
+                    if (result.scanned_at) lastScanTimeRef.current = result.scanned_at
                     setScannedRfid(result.rfid_uid)
                 }
-            } catch (err) {
-                // Silent fail
+            } catch (_err) {
+                // Silent fail; retry next poll
             }
-        }, 100)
+        }
 
+        const interval = setInterval(pollForScan, 600)
+        pollForScan()
         return () => clearInterval(interval)
-    }, [isScanning])
+    }, [isScanning, scannedRfid])
 
     // Update Profile Info
     const handleUpdateInfo = async () => {
@@ -381,7 +390,10 @@ export default function ProfilePage() {
 
                         {!isScanning ? (
                             <Button
-                                onClick={() => setIsScanning(true)}
+                                onClick={() => {
+                                    setIsScanning(true)
+                                    lastScanTimeRef.current = null
+                                }}
                                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                             >
                                 <Radio className="h-4 w-4 mr-2" />
@@ -389,20 +401,29 @@ export default function ProfilePage() {
                             </Button>
                         ) : (
                             <>
-                                <input
-                                    type="text"
-                                    value={scannedRfid}
-                                    onChange={(e) => setScannedRfid(e.target.value)}
-                                    placeholder="Scanning... or enter RFID manually"
-                                    className="w-full px-3 py-2 border rounded-md bg-yellow-50"
-                                    autoFocus
+                                <ScanningUI
+                                    isScanning={isScanning}
+                                    icon={<Radio className="h-12 w-12" />}
+                                    title="Scan RFID Badge"
+                                    description="Hold your RFID badge near the scanner"
+                                    color="blue"
                                 />
-                                <div className="text-sm text-yellow-700 bg-yellow-50 p-3 rounded-lg">
-                                    Listening for RFID scan... (auto-stops after scan)
+                                <div className="space-y-2">
+                                    <Input
+                                        type="text"
+                                        value={scannedRfid}
+                                        onChange={(e) => setScannedRfid(e.target.value)}
+                                        placeholder="RFID will appear here or enter manually"
+                                        className="bg-white text-black font-mono"
+                                        autoFocus
+                                    />
                                 </div>
                                 <div className="flex gap-2">
                                     <Button
-                                        onClick={() => setIsScanning(false)}
+                                        onClick={() => {
+                                            setIsScanning(false)
+                                            lastScanTimeRef.current = null
+                                        }}
                                         variant="outline"
                                         className="flex-1"
                                     >
