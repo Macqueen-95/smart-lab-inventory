@@ -1061,6 +1061,17 @@ def get_lend_history():
     return jsonify({"success": True, "history": history}), 200
 
 
+@app.route("/api/user/by-rfid/<rfid_uid>", methods=["GET"])
+@login_required
+def get_user_by_rfid_endpoint(rfid_uid):
+    """Get user by RFID UID."""
+    user = get_user_by_rfid(rfid_uid)
+    if user:
+        return jsonify({"success": True, "user": user}), 200
+    else:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+
 @app.route("/api/user/profile", methods=["PATCH"])
 @login_required
 def update_user_profile():

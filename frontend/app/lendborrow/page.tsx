@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { lendBorrowAPI, rfidAPI } from "@/lib/api"
+import { lendBorrowAPI, rfidAPI, usersAPI } from "@/lib/api"
 import { XCircle, History, RefreshCw, Trash2, Check } from "lucide-react"
 
 type ScanPhase = "waiting-item" | "items-listed" | "waiting-user"
@@ -13,6 +13,7 @@ export default function BorrowPage() {
     const [scannedItems, setScannedItems] = useState<any[]>([])
     const [scannedRfidUid, setScannedRfidUid] = useState<string>("")
     const [userRfid, setUserRfid] = useState("")
+    const [matchedUser, setMatchedUser] = useState<any>(null)
     const [activeLentItems, setActiveLentItems] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
     const [message, setMessage] = useState<{ type: "success" | "error" | "info", text: string } | null>(null)
@@ -62,6 +63,20 @@ export default function BorrowPage() {
                 const result = await rfidAPI.getLatestScan()
                 if (result.success && result.rfid_uid && result.rfid_uid !== userRfid) {
                     setUserRfid(result.rfid_uid)
+                    // Try to match user by RFID
+                    try {
+                        const userResult = await usersAPI.getUserByRfid(result.rfid_uid)
+                        if (userResult.success && userResult.user) {
+                            setMatchedUser(userResult.user)
+                            setMessage({ type: "info", text: `User matched: ${userResult.user.name}` })
+                        } else {
+                            setMatchedUser(null)
+                            setMessage({ type: "error", text: "User not found for this RFID" })
+                        }
+                    } catch (err) {
+                        setMatchedUser(null)
+                        setMessage({ type: "error", text: "Failed to match user" })
+                    }
                 }
             } catch (e) {
                 // Ignore
@@ -124,8 +139,8 @@ export default function BorrowPage() {
             setMessage({ type: "error", text: "Please scan at least one item" })
             return
         }
-        if (!userRfid) {
-            setMessage({ type: "error", text: "Please scan user RFID" })
+        if (!matchedUser || !userRfid) {
+            setMessage({ type: "error", text: "Please scan user RFID and verify user match" })
             return
         }
 
@@ -140,9 +155,10 @@ export default function BorrowPage() {
                 }
             }
             
-            setMessage({ type: "success", text: `Successfully lent ${scannedItems.length} item(s)!` })
+            setMessage({ type: "success", text: `Successfully lent ${scannedItems.length} item(s) to ${matchedUser.name}!` })
             setScannedItems([])
             setUserRfid("")
+            setMatchedUser(null)
             setScannedRfidUid("")
             setScanPhase("waiting-item")
             setItemScanListening(false)
@@ -297,13 +313,22 @@ export default function BorrowPage() {
                                         </div>
                                     </div>
                                     <div className="text-center">
-                                        {userRfid ? (
+                                        {matchedUser ? (
                                             <>
                                                 <div className="flex items-center justify-center gap-2 text-green-900 mb-2">
                                                     <Check className="h-6 w-6" />
-                                                    <p className="text-lg font-semibold">User Scanned!</p>
+                                                    <p className="text-lg font-semibold">User Matched!</p>
                                                 </div>
                                                 <p className="text-sm font-mono text-green-700">{userRfid}</p>
+                                                <p className="text-base font-semibold text-green-900 mt-2">{matchedUser.name}</p>
+                                            </>
+                                        ) : userRfid ? (
+                                            <>
+                                                <div className="flex items-center justify-center gap-2 text-red-900 mb-2">
+                                                    <XCircle className="h-6 w-6" />
+                                                    <p className="text-lg font-semibold">User Not Found</p>
+                                                </div>
+                                                <p className="text-sm font-mono text-red-700">{userRfid}</p>
                                             </>
                                         ) : (
                                             <>
@@ -370,7 +395,7 @@ export default function BorrowPage() {
                             </>
                         )}
 
-                        {scanPhase === "waiting-user" && userRfid && (
+                        {scanPhase === "waiting-user" && matchedUser && (
                             <>
                                 <Button 
                                     onClick={handleBorrow}
@@ -383,6 +408,7 @@ export default function BorrowPage() {
                                     variant="outline"
                                     onClick={() => {
                                         setUserRfid("")
+                                        setMatchedUser(null)
                                         setUserScanListening(true)
                                     }}
                                 >
@@ -391,9 +417,14 @@ export default function BorrowPage() {
                             </>
                         )}
 
-                        {scanPhase === "waiting-user" && !userRfid && (
+                        {scanPhase === "waiting-user" && !matchedUser && (
                             <Button 
-                                onClick={() => setScanPhase("items-listed")}
+                                onClick={() => {
+                                    setUserScanListening(false)
+                                    setScanPhase("items-listed")
+                                    setUserRfid("")
+                                    setMatchedUser(null)
+                                }}
                                 variant="outline"
                                 className="flex-1"
                             >

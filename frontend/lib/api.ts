@@ -237,6 +237,10 @@ export const usersAPI = {
     const res = await api.get<{ success: boolean; users: Array<{ id: number; name: string; userid: string }> }>("/users")
     return res.data
   },
+  getUserByRfid: async (rfid_uid: string) => {
+    const res = await api.get<{ success: boolean; user?: any; message?: string }>(`/user/by-rfid/${rfid_uid}`)
+    return res.data
+  },
 }
 
 export const itemsAPI = {
