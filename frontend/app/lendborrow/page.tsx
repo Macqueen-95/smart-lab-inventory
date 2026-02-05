@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { lendBorrowAPI, rfidAPI } from "@/lib/api"
@@ -19,6 +19,9 @@ export default function BorrowPage() {
     const [showHistory, setShowHistory] = useState(false)
     const [itemScanListening, setItemScanListening] = useState(false)
     const [userScanListening, setUserScanListening] = useState(false)
+    
+    // Track which RFIDs have been added to avoid duplicates
+    const addedRfidsRef = useRef<Set<string>>(new Set())
 
     // Poll for item scans
     useEffect(() => {
@@ -27,7 +30,9 @@ export default function BorrowPage() {
         const pollForScan = async () => {
             try {
                 const result = await rfidAPI.getLatestScan()
-                if (result.success && result.rfid_uid && result.rfid_uid !== scannedRfidUid) {
+                // Only add if scan is successful, has RFID, and hasn't been added yet
+                if (result.success && result.rfid_uid && !addedRfidsRef.current.has(result.rfid_uid)) {
+                    addedRfidsRef.current.add(result.rfid_uid)
                     setScannedRfidUid(result.rfid_uid)
                     const newItem = {
                         id: Date.now(),
@@ -46,7 +51,7 @@ export default function BorrowPage() {
         const interval = setInterval(pollForScan, 100)
         pollForScan()
         return () => clearInterval(interval)
-    }, [itemScanListening, scanPhase, scannedRfidUid])
+    }, [itemScanListening, scanPhase, scannedItems.length])
 
     // Poll for user scans
     useEffect(() => {
@@ -96,7 +101,15 @@ export default function BorrowPage() {
     }
 
     const handleRemoveItem = (id: number) => {
-        setScannedItems(prev => prev.filter(item => item.id !== id))
+        setScannedItems(prev => {
+            const updated = prev.filter(item => item.id !== id)
+            // Clean up the ref if item is removed
+            const removedItem = prev.find(item => item.id === id)
+            if (removedItem) {
+                addedRfidsRef.current.delete(removedItem.rfid_uid)
+            }
+            return updated
+        })
     }
 
     const handleStartUserScan = () => {
@@ -167,6 +180,7 @@ export default function BorrowPage() {
         setMessage(null)
         setItemScanListening(false)
         setUserScanListening(false)
+        addedRfidsRef.current.clear()
     }
 
     return (
