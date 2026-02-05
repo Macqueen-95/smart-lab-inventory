@@ -23,47 +23,50 @@ export default function BorrowPage() {
     
     // Track which RFIDs have been added to avoid duplicates
     const addedRfidsRef = useRef<Set<string>>(new Set())
+    const lastScanTimeRef = useRef<string | null>(null)
 
-    // Poll for item scans
+    // Poll for item scans (600ms to reduce server load and avoid CORS/502 under load)
     useEffect(() => {
         if (!itemScanListening || scanPhase !== "waiting-item") return
 
         const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestScan()
-                // Only add if scan is successful, has RFID, and hasn't been added yet
+                const result = await rfidAPI.getLatestScan(lastScanTimeRef.current ?? undefined)
                 if (result.success && result.rfid_uid && !addedRfidsRef.current.has(result.rfid_uid)) {
                     addedRfidsRef.current.add(result.rfid_uid)
+                    if (result.scanned_at) lastScanTimeRef.current = result.scanned_at
                     setScannedRfidUid(result.rfid_uid)
-                    const newItem = {
-                        id: Date.now(),
-                        rfid_uid: result.rfid_uid,
-                        item_name: `Item ${scannedItems.length + 1}`,
-                        scanned_at: new Date().toLocaleTimeString()
-                    }
-                    setScannedItems(prev => [...prev, newItem])
+                    setScannedItems((prev) => {
+                        const newItem = {
+                            id: Date.now(),
+                            rfid_uid: result.rfid_uid!,
+                            item_name: `Item ${prev.length + 1}`,
+                            scanned_at: new Date().toLocaleTimeString(),
+                        }
+                        return [...prev, newItem]
+                    })
                     setMessage({ type: "info", text: `Item scanned: ${result.rfid_uid}` })
                 }
-            } catch (e) {
-                // Ignore
+            } catch (_e) {
+                // Ignore network/CORS errors; will retry next poll
             }
         }
 
-        const interval = setInterval(pollForScan, 100)
+        const interval = setInterval(pollForScan, 600)
         pollForScan()
         return () => clearInterval(interval)
-    }, [itemScanListening, scanPhase, scannedItems.length])
+    }, [itemScanListening, scanPhase])
 
-    // Poll for user scans
+    // Poll for user scans and match user by RFID (600ms; immediate user lookup when new scan)
     useEffect(() => {
         if (!userScanListening || scanPhase !== "waiting-user") return
 
         const pollForScan = async () => {
             try {
-                const result = await rfidAPI.getLatestScan()
+                const result = await rfidAPI.getLatestScan(lastScanTimeRef.current ?? undefined)
                 if (result.success && result.rfid_uid && result.rfid_uid !== userRfid) {
+                    if (result.scanned_at) lastScanTimeRef.current = result.scanned_at
                     setUserRfid(result.rfid_uid)
-                    // Try to match user by RFID
                     try {
                         const userResult = await usersAPI.getUserByRfid(result.rfid_uid)
                         if (userResult.success && userResult.user) {
@@ -73,17 +76,17 @@ export default function BorrowPage() {
                             setMatchedUser(null)
                             setMessage({ type: "error", text: "User not found for this RFID" })
                         }
-                    } catch (err) {
+                    } catch (_err) {
                         setMatchedUser(null)
                         setMessage({ type: "error", text: "Failed to match user" })
                     }
                 }
-            } catch (e) {
-                // Ignore
+            } catch (_e) {
+                // Ignore; retry next poll
             }
         }
 
-        const interval = setInterval(pollForScan, 100)
+        const interval = setInterval(pollForScan, 600)
         pollForScan()
         return () => clearInterval(interval)
     }, [userScanListening, scanPhase, userRfid])
@@ -105,6 +108,7 @@ export default function BorrowPage() {
 
     const handleStartItemScan = () => {
         setScannedRfidUid("")
+        lastScanTimeRef.current = null
         setItemScanListening(true)
     }
 
@@ -129,6 +133,7 @@ export default function BorrowPage() {
 
     const handleStartUserScan = () => {
         setUserRfid("")
+        lastScanTimeRef.current = null
         setItemScanListening(false)
         setUserScanListening(true)
         setScanPhase("waiting-user")
@@ -197,6 +202,7 @@ export default function BorrowPage() {
         setItemScanListening(false)
         setUserScanListening(false)
         addedRfidsRef.current.clear()
+        lastScanTimeRef.current = null
     }
 
     return (

@@ -322,8 +322,11 @@ export const rfidAPI = {
     const res = await api.get<{ success: boolean; rfid_uid?: string; scanned_at?: string }>("/rfid/latest-unassigned")
     return res.data
   },
-  getLatestScan: async () => {
-    const res = await api.get<{ success: boolean; rfid_uid?: string; scanned_at?: string }>("/rfid/latest-scan")
+  getLatestScan: async (since?: string) => {
+    const params = since ? { since } : {}
+    const res = await api.get<{ success: boolean; rfid_uid?: string; scanned_at?: string }>("/rfid/latest-scan", {
+      params,
+    })
     return res.data
   },
 }

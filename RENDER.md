@@ -17,7 +17,7 @@ In the **Backend** service → **Environment**:
 | Key | Value | Notes |
 |-----|--------|--------|
 | `DATABASE_URL` | `postgresql://admin:...@dpg-d613k794tr6s73824ah0-a.singapore-postgres.render.com/smart_sol` | Use the **External** URL from your Render Postgres dashboard. If the service is linked to Postgres, Render may add this automatically. |
-| `FRONTEND_URL` | `https://<your-frontend>.onrender.com` | **Required.** Replace with your actual Render frontend URL (no trailing slash). Needed for CORS and cookies. |
+| `FRONTEND_URL` | Your frontend origin(s) | **Required.** Single URL or comma-separated (e.g. `https://cyber-forge-taupe.vercel.app` or `https://your-app.onrender.com,https://cyber-forge-taupe.vercel.app`). No trailing slash. Needed for CORS and cookies (e.g. lendborrow RFID, login). |
 | `SESSION_SECRET_KEY` | (random string) | **Required in production.** Generate a long random string and set it here. |
 | `RENDER` | (leave as-is) | Render sets `RENDER=true` automatically; the app uses it for secure cookies. |
 

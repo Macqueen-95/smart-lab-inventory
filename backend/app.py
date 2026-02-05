@@ -75,10 +75,22 @@ app.config["SESSION_COOKIE_HTTPONLY"] = True
 
 Session(app)
 
-# CORS: set FRONTEND_URL to your Render frontend URL (e.g. https://your-app.onrender.com)
-frontend_url = os.environ.get("FRONTEND_URL", "*")
-allowed_origins = [frontend_url] if frontend_url != "*" else "*"
-CORS(app, resources={r"/api/*": {"origins": allowed_origins}}, supports_credentials=True)
+# CORS: set FRONTEND_URL to your frontend URL(s). Comma-separated for multiple (e.g. Vercel + Render).
+_frontend_url = os.environ.get("FRONTEND_URL", "*").strip()
+if _frontend_url == "*":
+    allowed_origins = "*"
+else:
+    allowed_origins = [o.strip() for o in _frontend_url.split(",") if o.strip()]
+CORS(
+    app,
+    resources={r"/api/*": {
+        "origins": allowed_origins,
+        "supports_credentials": True,
+        "allow_headers": ["Content-Type", "Authorization"],
+        "methods": ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    }},
+    supports_credentials=True,
+)
 
 def login_required(f):
     @wraps(f)
@@ -544,53 +556,39 @@ def api_get_latest_unassigned_rfid():
 @app.route("/api/rfid/latest-scan", methods=["GET"])
 @login_required
 def api_get_latest_scan():
-    """Get the latest RFID scan since a given timestamp (for service operations)."""
-    uid = get_current_user_id()
-    if not uid:
-        return jsonify({"success": False, "message": "User not found"}), 404
-    
-    from db_management import get_db_connection
+    """Get the latest RFID scan (optionally after since= timestamp). Returns 200 with success false when none."""
+    from auth import get_db_connection
     from psycopg.rows import dict_row
-    from datetime import datetime, timedelta
-    
+
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "message": "Database connection failed"}), 500
-    
+
     try:
-        # Get the 'since' parameter to avoid returning the same scan multiple times
-        since = request.args.get('since')
-        
+        since = request.args.get("since")
         with conn.cursor(row_factory=dict_row) as cur:
             if since:
-                # Return scans AFTER the given timestamp
                 cur.execute("""
-                    SELECT rfid_uid, scanned_at 
-                    FROM rfid_scan_logs 
-                    WHERE scan_status IN ('OK', 'UNKNOWN')
-                    AND scanned_at > %s
-                    ORDER BY scanned_at DESC 
-                    LIMIT 1
+                    SELECT rfid_uid, scanned_at FROM rfid_scan_logs
+                    WHERE scan_status IN ('OK', 'UNKNOWN') AND scanned_at > %s
+                    ORDER BY scanned_at DESC LIMIT 1
                 """, (since,))
             else:
-                # Return the latest scan
                 cur.execute("""
-                    SELECT rfid_uid, scanned_at 
-                    FROM rfid_scan_logs 
+                    SELECT rfid_uid, scanned_at FROM rfid_scan_logs
                     WHERE scan_status IN ('OK', 'UNKNOWN')
-                    ORDER BY scanned_at DESC 
-                    LIMIT 1
+                    ORDER BY scanned_at DESC LIMIT 1
                 """)
             result = cur.fetchone()
-            
-            if result:
-                return jsonify({
-                    "success": True, 
-                    "rfid_uid": result["rfid_uid"], 
-                    "scanned_at": result["scanned_at"].isoformat() if result["scanned_at"] else None
-                }), 200
-            else:
-                return jsonify({"success": False, "message": "No recent scans found"}), 404
+
+        if result and result.get("rfid_uid"):
+            scanned_at = result.get("scanned_at")
+            return jsonify({
+                "success": True,
+                "rfid_uid": result["rfid_uid"],
+                "scanned_at": scanned_at.isoformat() if scanned_at else None,
+            }), 200
+        return jsonify({"success": False, "message": "No recent scans found"}), 200
     except Exception as e:
         print(f"Error getting latest scan: {e}")
         return jsonify({"success": False, "message": "Failed to fetch latest scan"}), 500
