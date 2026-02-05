@@ -44,12 +44,21 @@ export default function AuditingPage() {
 
     const days = useMemo(() => buildCalendarDays(currentMonth), [currentMonth])
 
-    // Map of dates that have audits
+    // Map of dates that have audits with status breakdown
     const auditDateMap = useMemo(() => {
-        const map = new Map<string, number>()
+        const map = new Map<string, { total: number; pending: number; ongoing: number; completed: number }>()
         monthAudits.forEach(audit => {
-            const count = map.get(audit.scheduled_date) || 0
-            map.set(audit.scheduled_date, count + 1)
+            const dateStr = audit.scheduled_date
+            const current = map.get(dateStr) || { total: 0, pending: 0, ongoing: 0, completed: 0 }
+            current.total += 1
+            if (audit.status === "ASSIGNED" || audit.status === "PENDING") {
+                current.pending += 1
+            } else if (audit.status === "IN_PROGRESS") {
+                current.ongoing += 1
+            } else if (audit.status === "COMPLETED") {
+                current.completed += 1
+            }
+            map.set(dateStr, current)
         })
         return map
     }, [monthAudits])
@@ -166,29 +175,43 @@ export default function AuditingPage() {
                             {days.map((day, idx) => {
                                 const isSelected = day ? formatDate(day) === selectedDate : false
                                 const dateStr = day ? formatDate(day) : ""
-                                const auditCount = auditDateMap.get(dateStr) || 0
-                                const hasAudits = auditCount > 0
+                                const auditInfo = auditDateMap.get(dateStr) || { total: 0, pending: 0, ongoing: 0, completed: 0 }
+                                const hasAudits = auditInfo.total > 0
                                 return (
                                     <button
                                         key={idx}
                                         onClick={() => handleSelectDate(day)}
                                         className={
-                                            "h-14 rounded border text-sm relative flex flex-col items-center justify-center " +
+                                            "h-20 rounded border text-sm relative flex flex-col items-center justify-center p-1 " +
                                             (day ? "bg-white hover:bg-zinc-50" : "bg-transparent border-transparent cursor-default") +
                                             (isSelected ? " border-black ring-2 ring-black" : " border-zinc-200") +
-                                            (hasAudits && !isSelected ? " bg-red-50 border-red-300" : "")
+                                            (hasAudits && !isSelected ? " bg-zinc-50" : "")
                                         }
                                         disabled={!day}
                                     >
                                         {day && (
                                             <>
-                                                <span className={hasAudits ? "text-red-700 font-semibold" : "text-zinc-700"}>
+                                                <span className={hasAudits ? "text-zinc-900 font-semibold" : "text-zinc-700"}>
                                                     {day.getDate()}
                                                 </span>
                                                 {hasAudits && (
-                                                    <span className="text-[10px] text-red-600 font-medium mt-0.5">
-                                                        {auditCount} {auditCount === 1 ? 'audit' : 'audits'}
-                                                    </span>
+                                                    <div className="flex gap-0.5 mt-1 flex-wrap justify-center">
+                                                        {auditInfo.pending > 0 && (
+                                                            <span className="text-[8px] bg-yellow-100 text-yellow-800 px-1 rounded" title={`${auditInfo.pending} pending`}>
+                                                                {auditInfo.pending}
+                                                            </span>
+                                                        )}
+                                                        {auditInfo.ongoing > 0 && (
+                                                            <span className="text-[8px] bg-blue-100 text-blue-800 px-1 rounded" title={`${auditInfo.ongoing} ongoing`}>
+                                                                {auditInfo.ongoing}
+                                                            </span>
+                                                        )}
+                                                        {auditInfo.completed > 0 && (
+                                                            <span className="text-[8px] bg-green-100 text-green-800 px-1 rounded" title={`${auditInfo.completed} completed`}>
+                                                                {auditInfo.completed}
+                                                            </span>
+                                                        )}
+                                                    </div>
                                                 )}
                                             </>
                                         )}

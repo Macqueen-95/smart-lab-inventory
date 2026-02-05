@@ -148,9 +148,15 @@ export default function AuditDetailPage() {
                                 <div key={item.rfid_uid} className="border rounded p-3">
                                     <div className="flex items-center justify-between gap-2">
                                         <div className="font-medium">{item.item_name}</div>
-                                        {item.status === "SCANNED" && <Badge variant="success">Scanned</Badge>}
-                                        {item.status === "IN_SERVICE" && <Badge variant="warning">In Service</Badge>}
-                                        {item.status === "MISSING" && <Badge variant="destructive">Missing</Badge>}
+                                        {item.status === "SCANNED" && (
+                                            <Badge className="bg-green-100 text-green-800 border-green-300">Scanned</Badge>
+                                        )}
+                                        {item.status === "IN_SERVICE" && (
+                                            <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">In Service</Badge>
+                                        )}
+                                        {item.status === "MISSING" && (
+                                            <Badge className="bg-red-100 text-red-800 border-red-300">Missing</Badge>
+                                        )}
                                     </div>
                                     <div className="text-xs text-zinc-500 mt-1">{item.rfid_uid}</div>
                                 </div>

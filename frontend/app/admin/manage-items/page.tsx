@@ -136,7 +136,8 @@ export default function ManageItemsPage() {
         setScannedRfidUid("")
         setRfidScanListening(true)
         setError(null)
-        lastScanTimeRef.current = null
+        // Reset to current time to ignore old scans
+        lastScanTimeRef.current = new Date().toISOString()
     }
 
     const handleCancelRfidScan = () => {

@@ -108,7 +108,8 @@ export default function BorrowPage() {
 
     const handleStartItemScan = () => {
         setScannedRfidUid("")
-        lastScanTimeRef.current = null
+        // Reset to current time to ignore old scans
+        lastScanTimeRef.current = new Date().toISOString()
         setItemScanListening(true)
     }
 
@@ -133,7 +134,8 @@ export default function BorrowPage() {
 
     const handleStartUserScan = () => {
         setUserRfid("")
-        lastScanTimeRef.current = null
+        // Reset to current time to ignore old scans
+        lastScanTimeRef.current = new Date().toISOString()
         setItemScanListening(false)
         setUserScanListening(true)
         setScanPhase("waiting-user")

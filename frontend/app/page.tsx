@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
-import { Package, Users, Activity, Router } from "lucide-react"
+import { Package, Users, Activity, Router, Bell, Calendar } from "lucide-react"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
-import { itemsAPI, roomsAPI, rfidAPI, type RFIDScanLog } from "@/lib/api"
+import { itemsAPI, roomsAPI, rfidAPI, periodicAuditAPI, authAPI, type RFIDScanLog } from "@/lib/api"
+import Link from "next/link"
 
 export default function Home() {
   const [roomData, setRoomData] = useState<Array<{ name: string; total: number }>>([])
@@ -16,11 +17,18 @@ export default function Home() {
     totalRooms: 0,
   })
   const [loading, setLoading] = useState(true)
+  const [todayScans, setTodayScans] = useState<any[]>([])
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const loadDashboard = async () => {
       setLoading(true)
       try {
+        // Check if admin
+        const me = await authAPI.getMe()
+        const admin = me.success && me.user?.userid === "admin"
+        setIsAdmin(admin)
+
         const roomsRes = await roomsAPI.list()
         const rooms = roomsRes.success ? roomsRes.rooms : []
 
@@ -51,6 +59,22 @@ export default function Home() {
           recentActivity: lastHourLogs.length,
           totalRooms: rooms.length,
         })
+
+        // Load today's scheduled periodic scans
+        if (admin) {
+          try {
+            const periodicRes = await periodicAuditAPI.list()
+            if (periodicRes.success && periodicRes.audits) {
+              const today = new Date().toISOString().split('T')[0]
+              const todayScansList = periodicRes.audits.filter((audit: any) => {
+                return audit.next_audit_date === today && audit.is_active
+              })
+              setTodayScans(todayScansList)
+            }
+          } catch (e) {
+            console.error("Failed to load periodic audits:", e)
+          }
+        }
       } finally {
         setLoading(false)
       }
@@ -65,6 +89,43 @@ export default function Home() {
         <h2 className="text-3xl font-bold tracking-tight">Dashboard</h2>
         <p className="text-zinc-500 dark:text-zinc-400">Overview of your smart campus inventory.</p>
       </div>
+
+      {/* Notice Section - Today's Scheduled Scans */}
+      {isAdmin && todayScans.length > 0 && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Bell className="h-5 w-5 text-blue-600" />
+              Notice: Scheduled Scans Today
+            </CardTitle>
+            <CardDescription>
+              {todayScans.length} {todayScans.length === 1 ? "room" : "rooms"} scheduled for periodic scanning today
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {todayScans.map((scan: any) => (
+                <div key={scan.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-200">
+                  <div className="flex-1">
+                    <p className="font-medium text-zinc-900">{scan.room_name}</p>
+                    <p className="text-sm text-zinc-600">
+                      Scanner: <span className="font-mono">{scan.scanner_id}</span>
+                    </p>
+                    {scan.note && (
+                      <p className="text-xs text-zinc-500 mt-1">{scan.note}</p>
+                    )}
+                  </div>
+                  <Link href="/auditing">
+                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                      View →
+                    </button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>

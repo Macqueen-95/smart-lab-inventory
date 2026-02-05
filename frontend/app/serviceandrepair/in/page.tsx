@@ -171,7 +171,8 @@ export default function InFromServicePage() {
                             onChange={(e) => setScannedRfid(e.target.value)}
                             onFocus={() => {
                                 setIsScanning(true)
-                                lastScanTimeRef.current = null
+                                // Reset to current time to ignore old scans
+                                lastScanTimeRef.current = new Date().toISOString()
                             }}
                             onBlur={() => setTimeout(() => setIsScanning(false), 500)}
                             className="bg-white text-black text-lg font-mono"

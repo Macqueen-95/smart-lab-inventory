@@ -392,7 +392,8 @@ export default function ProfilePage() {
                             <Button
                                 onClick={() => {
                                     setIsScanning(true)
-                                    lastScanTimeRef.current = null
+                                    // Reset to current time to ignore old scans
+                                    lastScanTimeRef.current = new Date().toISOString()
                                 }}
                                 className="w-full bg-blue-600 hover:bg-blue-700 text-white"
                             >

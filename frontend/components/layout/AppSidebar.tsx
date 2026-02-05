@@ -94,8 +94,8 @@ export function AppSidebar() {
             {/* Mobile Trigger */}
             <div className="md:hidden p-4 border-b flex justify-between items-center bg-white dark:bg-zinc-950">
                 <div className="flex items-center gap-2">
-                    <img src="/logoo.png" alt="Smart Lab" className="h-6 w-6 object-contain" />
-                    <h1 className="font-semibold text-lg">Smart Lab</h1>
+                    <img src="/logoo.png" alt="Xinventory" className="h-6 w-6 object-contain" />
+                    <h1 className="font-semibold text-lg">Xinventory</h1>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
                     <Menu className="h-5 w-5" />
@@ -113,15 +113,15 @@ export function AppSidebar() {
                 <div className={cn("p-6 border-b border-gray-200 flex items-center justify-between", isCollapsed && "md:px-2 md:justify-center")}>
                     {!isCollapsed && (
                         <div className="flex items-center gap-3">
-                            <img src="/logoo.png" alt="Smart Lab" className="h-10 w-10 object-contain" />
+                            <img src="/logoo.png" alt="Xinventory" className="h-10 w-10 object-contain" />
                             <div>
-                                <h1 className="text-lg font-bold tracking-tight">Smart Lab</h1>
-                                <p className="text-zinc-500 text-xs font-normal">Inventory System</p>
+                                <h1 className="text-lg font-bold tracking-tight">Xinventory</h1>
+                                <p className="text-zinc-500 text-xs font-normal">everything in its place</p>
                             </div>
                         </div>
                     )}
                     {isCollapsed && (
-                        <img src="/logoo.png" alt="SL" className="h-8 w-8 object-contain" />
+                        <img src="/logoo.png" alt="X" className="h-8 w-8 object-contain" />
                     )}
                     <Button
                         variant="ghost"

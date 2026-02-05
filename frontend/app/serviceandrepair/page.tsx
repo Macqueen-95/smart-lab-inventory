@@ -5,7 +5,7 @@ import Link from "next/link"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { Table } from "@/components/ui/Table"
-import { Package, Calendar, AlertCircle } from "lucide-react"
+import { Package, AlertCircle } from "lucide-react"
 import { serviceAPI, type ServiceRecord } from "@/lib/api"
 
 export default function ServiceAndRepairPage() {
@@ -66,18 +66,6 @@ export default function ServiceAndRepairPage() {
                         </CardContent>
                     </Card>
                 </Link>
-
-                <Card className="border-blue-200 bg-blue-50">
-                    <CardContent className="pt-6">
-                        <div className="flex flex-col items-center text-center space-y-3">
-                            <div className="p-4 bg-blue-600 rounded-full">
-                                <Calendar className="h-8 w-8 text-white" />
-                            </div>
-                            <h3 className="text-xl font-bold text-blue-700">Calendar</h3>
-                            <p className="text-sm text-blue-600">View service schedule</p>
-                        </div>
-                    </CardContent>
-                </Card>
             </div>
 
             {/* Items Out for Service Table */}

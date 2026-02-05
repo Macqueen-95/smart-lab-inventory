@@ -17,11 +17,34 @@ const DUMMY_SCANNERS = [
   { id: "SCANNER_05", name: "Lab Scanner" },
 ]
 
-const INTERVAL_OPTIONS = [
-  { value: "24h", label: "Every 24 Hours" },
-  { value: "2d", label: "Every 2 Days" },
-  { value: "5d", label: "Every 5 Days" },
-]
+// Interval configuration with flexible units
+const INTERVAL_UNITS = {
+  hours: [1, 2, 4, 6, 8, 12, 24],
+  days: [1, 2, 3, 5, 7, 14, 30],
+  months: [1, 2, 3, 6, 12],
+}
+
+// Map to backend format (24h, 2d, 5d) - backend needs to support more
+// For now, we'll convert to closest supported value
+const convertToBackendInterval = (value: number, unit: string): string => {
+  if (unit === "hours") {
+    if (value <= 24) return "24h"
+    return "24h" // Default to 24h for hours > 24
+  }
+  if (unit === "days") {
+    if (value <= 2) return "2d"
+    if (value <= 5) return "5d"
+    return "5d" // Default to 5d
+  }
+  if (unit === "months") {
+    // Convert months to days (approximate)
+    const days = value * 30
+    if (days <= 2) return "2d"
+    if (days <= 5) return "5d"
+    return "5d"
+  }
+  return "24h"
+}
 
 export default function PeriodicAuditPage() {
   const router = useRouter()
@@ -31,7 +54,8 @@ export default function PeriodicAuditPage() {
   const [selectedPlan, setSelectedPlan] = useState<number | "">("")
   const [selectedRoom, setSelectedRoom] = useState<number | "">("")
   const [selectedScanner, setSelectedScanner] = useState<string>("")
-  const [selectedInterval, setSelectedInterval] = useState<string>("24h")
+  const [intervalValue, setIntervalValue] = useState<number>(24)
+  const [intervalUnit, setIntervalUnit] = useState<"hours" | "days" | "months">("hours")
   const [note, setNote] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -72,17 +96,19 @@ export default function PeriodicAuditPage() {
     setError(null)
     setSuccess(null)
 
-    if (!selectedRoom || !selectedScanner || !selectedInterval) {
+    if (!selectedRoom || !selectedScanner || !intervalValue) {
       setError("Please select room, scanner, and interval")
       return
     }
+
+    const backendInterval = convertToBackendInterval(intervalValue, intervalUnit)
 
     setLoading(true)
     const res = await periodicAuditAPI.create({
       floor_plan_id: selectedPlan ? Number(selectedPlan) : null,
       room_id: Number(selectedRoom),
       scanner_id: selectedScanner,
-      interval_type: selectedInterval,
+      interval_type: backendInterval,
       note: note || undefined,
     })
 
@@ -190,7 +216,7 @@ export default function PeriodicAuditPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Zap className="h-5 w-5" />
@@ -198,17 +224,48 @@ export default function PeriodicAuditPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <select
-              className="w-full border rounded px-3 py-2"
-              value={selectedInterval}
-              onChange={(e) => setSelectedInterval(e.target.value)}
-            >
-              {INTERVAL_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-3 items-end">
+              <div className="flex-1">
+                <label className="text-sm font-medium text-zinc-700 mb-1 block">Interval Value</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={intervalValue}
+                  onChange={(e) => setIntervalValue(Number(e.target.value))}
+                >
+                  {INTERVAL_UNITS[intervalUnit].map((val) => (
+                    <option key={val} value={val}>
+                      {val}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="text-sm font-medium text-zinc-700 mb-1 block">Unit</label>
+                <select
+                  className="w-full border rounded px-3 py-2"
+                  value={intervalUnit}
+                  onChange={(e) => {
+                    const newUnit = e.target.value as "hours" | "days" | "months"
+                    setIntervalUnit(newUnit)
+                    // Reset to first available value for the new unit
+                    setIntervalValue(INTERVAL_UNITS[newUnit][0])
+                  }}
+                >
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                  <option value="months">Months</option>
+                </select>
+              </div>
+              <div className="flex-1">
+                <label className="text-sm font-medium text-zinc-700 mb-1 block">Preview</label>
+                <div className="border rounded px-3 py-2 bg-zinc-50 text-sm">
+                  Every {intervalValue} {intervalUnit === "hours" ? (intervalValue === 1 ? "hour" : "hours") : intervalUnit === "days" ? (intervalValue === 1 ? "day" : "days") : (intervalValue === 1 ? "month" : "months")}
+                </div>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500 mt-2">
+              Note: Backend currently supports 24h, 2d, and 5d intervals. Your selection will be mapped to the closest supported value.
+            </p>
           </CardContent>
         </Card>
 
