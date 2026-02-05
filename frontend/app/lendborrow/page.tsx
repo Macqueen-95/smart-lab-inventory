@@ -19,6 +19,17 @@ export default function BorrowPage() {
     const pollingRef = useRef<NodeJS.Timeout | null>(null)
     const lastScannedRef = useRef<string>("")
     const lastScannedTimestampRef = useRef<string>("")
+    const scanPhaseRef = useRef<ScanPhase>("waiting-item")
+    const scannedItemsRef = useRef<any[]>([])
+
+    // Keep refs in sync with state
+    useEffect(() => {
+        scanPhaseRef.current = scanPhase
+    }, [scanPhase])
+
+    useEffect(() => {
+        scannedItemsRef.current = scannedItems
+    }, [scannedItems])
 
     const pollRfid = async () => {
         try {
@@ -37,17 +48,17 @@ export default function BorrowPage() {
                     lastScannedTimestampRef.current = result.scanned_at
                 }
                 
-                if (scanPhase === "waiting-item") {
+                if (scanPhaseRef.current === "waiting-item") {
                     // Auto-add item to list
                     const newItem = {
                         id: Date.now(),
                         rfid_uid: result.rfid_uid,
-                        item_name: `Item ${scannedItems.length + 1}`,
+                        item_name: `Item ${scannedItemsRef.current.length + 1}`,
                         scanned_at: new Date().toLocaleTimeString()
                     }
                     setScannedItems(prev => [...prev, newItem])
                     setMessage({ type: "info", text: `Item scanned: ${result.rfid_uid}` })
-                } else if (scanPhase === "waiting-user") {
+                } else if (scanPhaseRef.current === "waiting-user") {
                     // User RFID scanned
                     setUserRfid(result.rfid_uid)
                 }
@@ -58,13 +69,18 @@ export default function BorrowPage() {
     }
 
     useEffect(() => {
+        // Initialize timestamp when entering waiting phases to only get NEW scans
         if (scanPhase === "waiting-item" || scanPhase === "waiting-user") {
+            if (!lastScannedTimestampRef.current) {
+                // First time entering this phase, initialize with current time
+                lastScannedTimestampRef.current = new Date().toISOString()
+            }
             pollingRef.current = setInterval(pollRfid, 500)
         }
         return () => {
             if (pollingRef.current) clearInterval(pollingRef.current)
         }
-    }, [scanPhase, scannedItems])
+    }, [scanPhase])
 
     useEffect(() => {
         loadActiveLentItems()
@@ -92,9 +108,10 @@ export default function BorrowPage() {
     }
 
     const handleProceedToUserScan = () => {
-        setScanPhase("waiting-user")
         lastScannedRef.current = ""
-        lastScannedTimestampRef.current = ""
+        // Reset timestamp so next phase gets fresh scans from this point
+        lastScannedTimestampRef.current = new Date().toISOString()
+        setScanPhase("waiting-user")
     }
 
     const handleBorrow = async () => {
@@ -155,6 +172,7 @@ export default function BorrowPage() {
         setScanPhase("waiting-item")
         setMessage(null)
         lastScannedRef.current = ""
+        // Reset timestamp for next scan cycle
         lastScannedTimestampRef.current = ""
     }
 
