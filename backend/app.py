@@ -9,10 +9,12 @@ from db_management import (
     init_tables as init_db_tables,
     create_floor_plan,
     get_floor_plans,
+    get_all_floor_plans,
     get_floor_plan_by_id,
     update_floor_plan_url,
     create_room,
     get_rooms_by_floor_plan,
+    get_all_rooms_by_floor_plan,
     get_rooms,
     get_room_by_id,
     create_inventory_item,
@@ -757,6 +759,18 @@ def list_floor_plans_for_user():
     return jsonify({"success": True, "floor_plans": plans}), 200
 
 
+@app.route("/api/admin/floor-plans/all", methods=["GET"])
+@login_required
+def list_all_floor_plans_admin():
+    """Get all floor plans in the database (admin only)."""
+    userid = session.get("user_id")
+    if not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin only"}), 403
+
+    plans = get_all_floor_plans()
+    return jsonify({"success": True, "floor_plans": plans}), 200
+
+
 @app.route("/api/admin/floor-plans/<int:plan_id>/rooms", methods=["GET"])
 @login_required
 def list_rooms_for_user_plan(plan_id: int):
@@ -773,6 +787,18 @@ def list_rooms_for_user_plan(plan_id: int):
         return jsonify({"success": False, "message": "User not found"}), 404
 
     rooms = get_rooms_by_floor_plan(plan_id, target_user_id)
+    return jsonify({"success": True, "rooms": rooms}), 200
+
+
+@app.route("/api/admin/floor-plans/<int:plan_id>/rooms/all", methods=["GET"])
+@login_required
+def list_all_rooms_for_plan_admin(plan_id: int):
+    """Get all rooms for a floor plan (admin only, no user filter)."""
+    userid = session.get("user_id")
+    if not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin only"}), 403
+
+    rooms = get_all_rooms_by_floor_plan(plan_id)
     return jsonify({"success": True, "rooms": rooms}), 200
 
 

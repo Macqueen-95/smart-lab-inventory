@@ -205,11 +205,13 @@ export const adminFloorPlansAPI = {
     return res.data
   },
   listAll: async (): Promise<{ success: boolean; floor_plans: FloorPlan[] }> => {
-    const res = await api.get<{ success: boolean; floor_plans: FloorPlan[] }>("/floor-plans")
+    // Use admin endpoint to get ALL floor plans from all users
+    const res = await api.get<{ success: boolean; floor_plans: FloorPlan[] }>("/admin/floor-plans/all")
     return res.data
   },
   listRoomsById: async (planId: number): Promise<{ success: boolean; rooms: Room[] }> => {
-    const res = await api.get<{ success: boolean; rooms: Room[] }>(`/floor-plans/${planId}/rooms`)
+    // Use admin endpoint to get all rooms for any floor plan
+    const res = await api.get<{ success: boolean; rooms: Room[] }>(`/admin/floor-plans/${planId}/rooms/all`)
     return res.data
   },
 }

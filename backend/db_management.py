@@ -157,6 +157,26 @@ def get_floor_plans(user_id: int):
         conn.close()
 
 
+def get_all_floor_plans():
+    """List all floor plans in the database (admin only)."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT id, floor_title, floor_description, floor_url, created_at, user_id
+                   FROM floor_plans ORDER BY created_at DESC""",
+            )
+            rows = cur.fetchall()
+            return [dict(r) for r in rows]
+    except Exception as e:
+        print(f"get_all_floor_plans error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
 def get_floor_plan_by_id(plan_id: int, user_id: int):
     """Get a single floor plan by id if it belongs to the user."""
     conn = get_db_connection()
@@ -237,6 +257,26 @@ def get_rooms_by_floor_plan(floor_plan_id: int, user_id: int):
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"get_rooms_by_floor_plan error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_all_rooms_by_floor_plan(floor_plan_id: int):
+    """List all rooms for a floor plan (admin only, no user filter)."""
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT id, room_name, room_description, floor_plan_id, created_at
+                   FROM rooms WHERE floor_plan_id = %s ORDER BY id""",
+                (floor_plan_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"get_all_rooms_by_floor_plan error: {e}")
         return []
     finally:
         conn.close()

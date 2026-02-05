@@ -17,33 +17,28 @@ const DUMMY_SCANNERS = [
   { id: "SCANNER_05", name: "Lab Scanner" },
 ]
 
-// Interval configuration with flexible units
-const INTERVAL_UNITS = {
-  hours: [1, 2, 4, 6, 8, 12, 24],
-  days: [1, 2, 3, 5, 7, 14, 30],
-  months: [1, 2, 3, 6, 12],
-}
-
-// Map to backend format (24h, 2d, 5d) - backend needs to support more
-// For now, we'll convert to closest supported value
+// Convert any interval to backend format
+// Backend currently supports: "24h", "2d", "5d"
+// We'll convert user input to the closest supported value
 const convertToBackendInterval = (value: number, unit: string): string => {
+  let totalHours = 0
+  
   if (unit === "hours") {
-    if (value <= 24) return "24h"
-    return "24h" // Default to 24h for hours > 24
+    totalHours = value
+  } else if (unit === "days") {
+    totalHours = value * 24
+  } else if (unit === "months") {
+    totalHours = value * 24 * 30 // Approximate
   }
-  if (unit === "days") {
-    if (value <= 2) return "2d"
-    if (value <= 5) return "5d"
-    return "5d" // Default to 5d
-  }
-  if (unit === "months") {
-    // Convert months to days (approximate)
-    const days = value * 30
-    if (days <= 2) return "2d"
-    if (days <= 5) return "5d"
+  
+  // Map to closest backend interval
+  if (totalHours <= 24) {
+    return "24h"
+  } else if (totalHours <= 48) {
+    return "2d"
+  } else {
     return "5d"
   }
-  return "24h"
 }
 
 export default function PeriodicAuditPage() {
@@ -54,7 +49,7 @@ export default function PeriodicAuditPage() {
   const [selectedPlan, setSelectedPlan] = useState<number | "">("")
   const [selectedRoom, setSelectedRoom] = useState<number | "">("")
   const [selectedScanner, setSelectedScanner] = useState<string>("")
-  const [intervalValue, setIntervalValue] = useState<number>(24)
+  const [intervalValue, setIntervalValue] = useState<string>("24")
   const [intervalUnit, setIntervalUnit] = useState<"hours" | "days" | "months">("hours")
   const [note, setNote] = useState<string>("")
   const [error, setError] = useState<string | null>(null)
@@ -101,7 +96,13 @@ export default function PeriodicAuditPage() {
       return
     }
 
-    const backendInterval = convertToBackendInterval(intervalValue, intervalUnit)
+    const numValue = parseFloat(intervalValue)
+    if (isNaN(numValue) || numValue <= 0) {
+      setError("Interval value must be a positive number")
+      return
+    }
+
+    const backendInterval = convertToBackendInterval(numValue, intervalUnit)
 
     setLoading(true)
     const res = await periodicAuditAPI.create({
@@ -227,17 +228,15 @@ export default function PeriodicAuditPage() {
             <div className="flex gap-3 items-end">
               <div className="flex-1">
                 <label className="text-sm font-medium text-zinc-700 mb-1 block">Interval Value</label>
-                <select
-                  className="w-full border rounded px-3 py-2"
+                <Input
+                  type="number"
+                  min="0.1"
+                  step="0.1"
+                  className="w-full"
                   value={intervalValue}
-                  onChange={(e) => setIntervalValue(Number(e.target.value))}
-                >
-                  {INTERVAL_UNITS[intervalUnit].map((val) => (
-                    <option key={val} value={val}>
-                      {val}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(e) => setIntervalValue(e.target.value)}
+                  placeholder="e.g., 24, 2.5, 1"
+                />
               </div>
               <div className="flex-1">
                 <label className="text-sm font-medium text-zinc-700 mb-1 block">Unit</label>
@@ -247,8 +246,6 @@ export default function PeriodicAuditPage() {
                   onChange={(e) => {
                     const newUnit = e.target.value as "hours" | "days" | "months"
                     setIntervalUnit(newUnit)
-                    // Reset to first available value for the new unit
-                    setIntervalValue(INTERVAL_UNITS[newUnit][0])
                   }}
                 >
                   <option value="hours">Hours</option>
@@ -258,8 +255,12 @@ export default function PeriodicAuditPage() {
               </div>
               <div className="flex-1">
                 <label className="text-sm font-medium text-zinc-700 mb-1 block">Preview</label>
-                <div className="border rounded px-3 py-2 bg-zinc-50 text-sm">
-                  Every {intervalValue} {intervalUnit === "hours" ? (intervalValue === 1 ? "hour" : "hours") : intervalUnit === "days" ? (intervalValue === 1 ? "day" : "days") : (intervalValue === 1 ? "month" : "months")}
+                <div className="border rounded px-3 py-2 bg-zinc-50 text-sm min-h-[42px] flex items-center">
+                  {intervalValue && !isNaN(parseFloat(intervalValue)) ? (
+                    `Every ${intervalValue} ${intervalUnit === "hours" ? (parseFloat(intervalValue) === 1 ? "hour" : "hours") : intervalUnit === "days" ? (parseFloat(intervalValue) === 1 ? "day" : "days") : (parseFloat(intervalValue) === 1 ? "month" : "months")}`
+                  ) : (
+                    <span className="text-zinc-400">Enter interval value</span>
+                  )}
                 </div>
               </div>
             </div>
