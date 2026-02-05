@@ -38,11 +38,14 @@ export default function BorrowPage() {
                 url += `?since=${encodeURIComponent(lastScannedTimestampRef.current)}`
             }
             
-            const result = await fetch(url, {
+            const response = await fetch(url, {
                 credentials: "include",
-            }).then(r => r.json())
+            })
             
-            if (result.success && result.rfid_uid && result.rfid_uid !== lastScannedRef.current) {
+            const result = await response.json()
+            
+            // Only process if we have success AND actual RFID data
+            if (response.ok && result.success && result.rfid_uid && result.rfid_uid !== lastScannedRef.current) {
                 lastScannedRef.current = result.rfid_uid
                 if (result.scanned_at) {
                     lastScannedTimestampRef.current = result.scanned_at
@@ -64,7 +67,7 @@ export default function BorrowPage() {
                 }
             }
         } catch (err) {
-            // Silent fail for polling
+            // Silent fail for polling - expected when no new scans
         }
     }
 
