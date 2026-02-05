@@ -87,6 +87,23 @@ def init_tables(conn=None):
                 );
             """)
             
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS periodic_audits (
+                    id SERIAL PRIMARY KEY,
+                    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                    floor_plan_id INTEGER REFERENCES floor_plans(id) ON DELETE SET NULL,
+                    room_id INTEGER REFERENCES rooms(id) ON DELETE SET NULL,
+                    scanner_id VARCHAR(50) NOT NULL,
+                    interval_type VARCHAR(20) NOT NULL,
+                    note TEXT,
+                    is_active BOOLEAN DEFAULT true,
+                    last_audit_date DATE,
+                    next_audit_date DATE,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                );
+            """)
+            
             conn.commit()
     except Exception as e:
         print(f"db_management init_tables error: {e}")
@@ -546,5 +563,214 @@ def create_bulk_inventory_items(room_id: int, base_name: str, quantity: int, ite
     except Exception as e:
         print(f"create_bulk_inventory_items error: {e}")
         return []
+    finally:
+        conn.close()
+
+
+# ---- Periodic Audits ----
+
+def create_periodic_audit(user_id: int, floor_plan_id: int, room_id: int, scanner_id: str, interval_type: str, note: str = None):
+    """
+    Create a periodic audit configuration.
+    interval_type: '24h', '2d', '5d'
+    Returns: dict with id and fields or None on error
+    """
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        # Calculate next audit date based on interval
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        
+        interval_days = {
+            '24h': 1,
+            '2d': 2,
+            '5d': 5
+        }.get(interval_type, 1)
+        
+        next_audit_date = today + timedelta(days=interval_days)
+        
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """INSERT INTO periodic_audits 
+                   (user_id, floor_plan_id, room_id, scanner_id, interval_type, note, next_audit_date)
+                   VALUES (%s, %s, %s, %s, %s, %s, %s)
+                   RETURNING id, floor_plan_id, room_id, scanner_id, interval_type, note, 
+                             is_active, next_audit_date, created_at""",
+                (user_id, floor_plan_id, room_id, scanner_id, interval_type, note, next_audit_date),
+            )
+            row = cur.fetchone()
+            conn.commit()
+            return dict(row) if row else None
+    except Exception as e:
+        print(f"create_periodic_audit error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def get_periodic_audits(user_id: int, is_active: bool = True):
+    """
+    Get all periodic audits for a user.
+    Returns: list of periodic audit dicts
+    """
+    conn = get_db_connection()
+    if not conn:
+        return []
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            if is_active:
+                cur.execute(
+                    """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
+                              pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
+                              pa.last_audit_date, pa.created_at,
+                              f.floor_title, r.room_name
+                       FROM periodic_audits pa
+                       LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
+                       LEFT JOIN rooms r ON pa.room_id = r.id
+                       WHERE pa.user_id = %s AND pa.is_active = true
+                       ORDER BY pa.next_audit_date ASC""",
+                    (user_id,),
+                )
+            else:
+                cur.execute(
+                    """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
+                              pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
+                              pa.last_audit_date, pa.created_at,
+                              f.floor_title, r.room_name
+                       FROM periodic_audits pa
+                       LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
+                       LEFT JOIN rooms r ON pa.room_id = r.id
+                       WHERE pa.user_id = %s
+                       ORDER BY pa.next_audit_date DESC""",
+                    (user_id,),
+                )
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"get_periodic_audits error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_periodic_audit_by_id(audit_id: int, user_id: int):
+    """
+    Get a periodic audit by id if it belongs to the user.
+    Returns: dict or None
+    """
+    conn = get_db_connection()
+    if not conn:
+        return None
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
+                          pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
+                          pa.last_audit_date, pa.created_at,
+                          f.floor_title, r.room_name
+                   FROM periodic_audits pa
+                   LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
+                   LEFT JOIN rooms r ON pa.room_id = r.id
+                   WHERE pa.id = %s AND pa.user_id = %s""",
+                (audit_id, user_id),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+    except Exception as e:
+        print(f"get_periodic_audit_by_id error: {e}")
+        return None
+    finally:
+        conn.close()
+
+
+def deactivate_periodic_audit(audit_id: int, user_id: int):
+    """
+    Deactivate a periodic audit.
+    Returns: bool indicating success
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE periodic_audits 
+                   SET is_active = false, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = %s AND user_id = %s""",
+                (audit_id, user_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception as e:
+        print(f"deactivate_periodic_audit error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def activate_periodic_audit(audit_id: int, user_id: int):
+    """
+    Activate a periodic audit.
+    Returns: bool indicating success
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """UPDATE periodic_audits 
+                   SET is_active = true, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = %s AND user_id = %s""",
+                (audit_id, user_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception as e:
+        print(f"activate_periodic_audit error: {e}")
+        return False
+    finally:
+        conn.close()
+
+
+def update_periodic_audit_last_scan(audit_id: int):
+    """
+    Update the last_audit_date and calculate next_audit_date for a periodic audit.
+    Returns: bool indicating success
+    """
+    conn = get_db_connection()
+    if not conn:
+        return False
+    try:
+        from datetime import datetime, timedelta
+        today = datetime.now().date()
+        
+        with conn.cursor(row_factory=dict_row) as cur:
+            # Get the interval type
+            cur.execute("SELECT interval_type FROM periodic_audits WHERE id = %s", (audit_id,))
+            row = cur.fetchone()
+            if not row:
+                return False
+            
+            interval_days = {
+                '24h': 1,
+                '2d': 2,
+                '5d': 5
+            }.get(row['interval_type'], 1)
+            
+            next_audit_date = today + timedelta(days=interval_days)
+            
+            cur.execute(
+                """UPDATE periodic_audits 
+                   SET last_audit_date = %s, next_audit_date = %s, updated_at = CURRENT_TIMESTAMP
+                   WHERE id = %s""",
+                (today, next_audit_date, audit_id),
+            )
+            conn.commit()
+            return cur.rowcount > 0
+    except Exception as e:
+        print(f"update_periodic_audit_last_scan error: {e}")
+        return False
     finally:
         conn.close()

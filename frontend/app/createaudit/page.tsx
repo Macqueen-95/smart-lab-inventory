@@ -116,10 +116,17 @@ export default function CreateAuditPage() {
                         <ArrowLeft className="h-4 w-4" />
                     </Button>
                 </Link>
-                <div>
+                <div className="flex-1">
                     <h2 className="text-2xl font-bold tracking-tight">Create Audit</h2>
                     <p className="text-zinc-500">Assign auditing tasks to a user.</p>
                 </div>
+                <Button 
+                    className="bg-blue-600 text-white hover:bg-blue-700"
+                    onClick={() => router.push("/periodic-audit")}
+                >
+                    <CalendarCheck className="h-4 w-4 mr-2" />
+                    Periodic Audits
+                </Button>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

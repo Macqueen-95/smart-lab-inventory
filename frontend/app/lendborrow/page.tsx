@@ -1,29 +1,55 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { Badge } from "@/components/ui/Badge"
-import { lendBorrowAPI, rfidAPI } from "@/lib/api"
-import { ArrowLeft, UserCheck, PackageCheck, Users, History, RefreshCw } from "lucide-react"
-import Link from "next/link"
+import { lendBorrowAPI } from "@/lib/api"
+import { XCircle, History, RefreshCw, Trash2, Check } from "lucide-react"
 
-export default function LendBorrowPage() {
-    const [activeTab, setActiveTab] = useState<"out" | "in" | "active">("out")
-    const [scannedRfid, setScannedRfid] = useState("")
+type ScanPhase = "waiting-item" | "items-listed" | "waiting-user" | "completed"
+
+export default function BorrowPage() {
+    const [scanPhase, setScanPhase] = useState<ScanPhase>("waiting-item")
+    const [scannedItems, setScannedItems] = useState<any[]>([])
     const [userRfid, setUserRfid] = useState("")
     const [activeLentItems, setActiveLentItems] = useState<any[]>([])
     const [loading, setLoading] = useState(false)
-    const [message, setMessage] = useState<{ type: "success" | "error", text: string } | null>(null)
+    const [message, setMessage] = useState<{ type: "success" | "error" | "info", text: string } | null>(null)
+    const [showHistory, setShowHistory] = useState(false)
+    const pollingRef = useRef<NodeJS.Timeout | null>(null)
+    const lastScannedRef = useRef<string>("")
+    const lastScannedTimestampRef = useRef<string>("")
 
     const pollRfid = async () => {
         try {
-            const result = await rfidAPI.getLatestScan()
-            if (result.success && result.rfid_uid) {
-                if (activeTab === "out" && !userRfid) {
+            let url = `/api/rfid/latest-scan`
+            if (lastScannedTimestampRef.current) {
+                url += `?since=${encodeURIComponent(lastScannedTimestampRef.current)}`
+            }
+            
+            const result = await fetch(url, {
+                credentials: "include",
+            }).then(r => r.json())
+            
+            if (result.success && result.rfid_uid && result.rfid_uid !== lastScannedRef.current) {
+                lastScannedRef.current = result.rfid_uid
+                if (result.scanned_at) {
+                    lastScannedTimestampRef.current = result.scanned_at
+                }
+                
+                if (scanPhase === "waiting-item") {
+                    // Auto-add item to list
+                    const newItem = {
+                        id: Date.now(),
+                        rfid_uid: result.rfid_uid,
+                        item_name: `Item ${scannedItems.length + 1}`,
+                        scanned_at: new Date().toLocaleTimeString()
+                    }
+                    setScannedItems(prev => [...prev, newItem])
+                    setMessage({ type: "info", text: `Item scanned: ${result.rfid_uid}` })
+                } else if (scanPhase === "waiting-user") {
+                    // User RFID scanned
                     setUserRfid(result.rfid_uid)
-                } else {
-                    setScannedRfid(result.rfid_uid)
                 }
             }
         } catch (err) {
@@ -32,9 +58,13 @@ export default function LendBorrowPage() {
     }
 
     useEffect(() => {
-        const interval = setInterval(pollRfid, 100)
-        return () => clearInterval(interval)
-    }, [activeTab, userRfid])
+        if (scanPhase === "waiting-item" || scanPhase === "waiting-user") {
+            pollingRef.current = setInterval(pollRfid, 500)
+        }
+        return () => {
+            if (pollingRef.current) clearInterval(pollingRef.current)
+        }
+    }, [scanPhase, scannedItems])
 
     useEffect(() => {
         loadActiveLentItems()
@@ -51,41 +81,63 @@ export default function LendBorrowPage() {
         }
     }
 
-    const handleLendOut = async () => {
-        if (!scannedRfid) {
-            setMessage({ type: "error", text: "Please scan an item" })
+    const handleExitScan = () => {
+        if (scannedItems.length > 0) {
+            setScanPhase("items-listed")
+        }
+    }
+
+    const handleRemoveItem = (id: number) => {
+        setScannedItems(prev => prev.filter(item => item.id !== id))
+    }
+
+    const handleProceedToUserScan = () => {
+        setScanPhase("waiting-user")
+        lastScannedRef.current = ""
+        lastScannedTimestampRef.current = ""
+    }
+
+    const handleBorrow = async () => {
+        if (scannedItems.length === 0) {
+            setMessage({ type: "error", text: "Please scan at least one item" })
+            return
+        }
+
+        if (!userRfid) {
+            setMessage({ type: "error", text: "Please scan user RFID" })
             return
         }
 
         setLoading(true)
         try {
-            const result = await lendBorrowAPI.lendOut(scannedRfid, userRfid || undefined)
-            if (result.success) {
-                setMessage({ type: "success", text: "Item lent out successfully!" })
-                setScannedRfid("")
-                loadActiveLentItems()
-            } else {
-                setMessage({ type: "error", text: result.message || "Failed to lend item" })
+            for (const item of scannedItems) {
+                const result = await lendBorrowAPI.lendOut(item.rfid_uid, userRfid)
+                if (!result.success) {
+                    setMessage({ type: "error", text: `Failed to lend item: ${result.message}` })
+                    setLoading(false)
+                    return
+                }
             }
+            
+            setMessage({ type: "success", text: `Successfully lent ${scannedItems.length} item(s)!` })
+            setScannedItems([])
+            setUserRfid("")
+            setScanPhase("waiting-item")
+            loadActiveLentItems()
+            lastScannedRef.current = ""
         } catch (err: any) {
-            setMessage({ type: "error", text: err.response?.data?.message || "Error lending item" })
+            setMessage({ type: "error", text: err.response?.data?.message || "Error lending items" })
         } finally {
             setLoading(false)
         }
     }
 
-    const handleReturnIn = async () => {
-        if (!scannedRfid) {
-            setMessage({ type: "error", text: "Please scan an item to return" })
-            return
-        }
-
+    const handleReturnItem = async (rfidUid: string) => {
         setLoading(true)
         try {
-            const result = await lendBorrowAPI.returnIn(scannedRfid)
+            const result = await lendBorrowAPI.returnIn(rfidUid)
             if (result.success) {
                 setMessage({ type: "success", text: "Item returned successfully!" })
-                setScannedRfid("")
                 loadActiveLentItems()
             } else {
                 setMessage({ type: "error", text: result.message || "Failed to return item" })
@@ -97,169 +149,284 @@ export default function LendBorrowPage() {
         }
     }
 
-    const clearUser = () => {
+    const handleReset = () => {
+        setScannedItems([])
         setUserRfid("")
-        setScannedRfid("")
+        setScanPhase("waiting-item")
         setMessage(null)
+        lastScannedRef.current = ""
+        lastScannedTimestampRef.current = ""
     }
 
     return (
-        <div className="space-y-6 max-w-4xl mx-auto">
+        <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h2 className="text-2xl font-bold tracking-tight">Lend/Borrow Management</h2>
-                    <p className="text-zinc-500">Track items lent to users and manage returns</p>
+                    <h2 className="text-2xl font-bold tracking-tight">Borrow Items</h2>
+                    <p className="text-zinc-500">Scan items and assign them to users</p>
                 </div>
-                <Link href="/admin">
-                    <Button variant="outline" className="gap-2">
-                        <ArrowLeft className="h-4 w-4" />
-                        Back to Admin
-                    </Button>
-                </Link>
-            </div>
-
-            {/* Tabs */}
-            <div className="flex gap-2 border-b">
-                <button
-                    onClick={() => { setActiveTab("out"); setScannedRfid(""); setUserRfid(""); setMessage(null) }}
-                    className={`px-4 py-2 font-medium border-b-2 transition ${activeTab === "out" ? "border-blue-600 text-blue-600" : "border-transparent text-zinc-500"}`}
+                <Button 
+                    variant="outline" 
+                    onClick={() => setShowHistory(!showHistory)}
+                    className="gap-2"
                 >
-                    <UserCheck className="h-4 w-4 inline mr-2" />
-                    Lend Out
-                </button>
-                <button
-                    onClick={() => { setActiveTab("in"); setScannedRfid(""); setUserRfid(""); setMessage(null) }}
-                    className={`px-4 py-2 font-medium border-b-2 transition ${activeTab === "in" ? "border-green-600 text-green-600" : "border-transparent text-zinc-500"}`}
-                >
-                    <PackageCheck className="h-4 w-4 inline mr-2" />
-                    Return Item
-                </button>
-                <button
-                    onClick={() => setActiveTab("active")}
-                    className={`px-4 py-2 font-medium border-b-2 transition ${activeTab === "active" ? "border-purple-600 text-purple-600" : "border-transparent text-zinc-500"}`}
-                >
-                    <Users className="h-4 w-4 inline mr-2" />
-                    Currently Lent ({activeLentItems.length})
-                </button>
+                    <History className="h-4 w-4" />
+                    {showHistory ? "Hide" : "Show"} History
+                </Button>
             </div>
 
             {message && (
-                <div className={`p-4 rounded-lg ${message.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : "bg-red-50 text-red-700 border border-red-200"}`}>
+                <div className={`p-4 rounded-lg ${
+                    message.type === "success" ? "bg-green-50 text-green-700 border border-green-200" : 
+                    message.type === "error" ? "bg-red-50 text-red-700 border border-red-200" :
+                    "bg-blue-50 text-blue-700 border border-blue-200"
+                }`}>
                     {message.text}
                 </div>
             )}
 
-            {/* Lend Out Tab */}
-            {activeTab === "out" && (
-                <div className="space-y-4">
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Lend Item to User</CardTitle>
-                            <CardDescription>Step 1: Scan user RFID (optional) | Step 2: Scan item RFID</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">User RFID (Optional)</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={userRfid}
-                                        onChange={(e) => setUserRfid(e.target.value)}
-                                        placeholder="Scan user badge or leave empty"
-                                        className="flex-1 px-3 py-2 border rounded-md"
-                                    />
-                                    <Button variant="outline" onClick={clearUser}>Clear</Button>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Main Scanning Area */}
+                <div className="lg:col-span-2 space-y-6">
+                    {/* Phase 1: Wait for Item Scans */}
+                    {scanPhase === "waiting-item" && (
+                        <Card className="border-2 border-blue-200 bg-blue-50">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <span className="text-3xl">📦</span>
+                                    Scan Items
+                                </CardTitle>
+                                <CardDescription>Hold items near the scanner to add them</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                                    {/* Breathing Circle */}
+                                    <div className="relative w-32 h-32">
+                                        <div className="absolute inset-0 breathing-pulse rounded-full bg-blue-100"></div>
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="breathing-circle w-24 h-24 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-5xl">
+                                                📦
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-lg font-semibold text-blue-900">Waiting for items...</p>
+                                        <p className="text-sm text-blue-700 mt-1">Items scanned: <span className="font-bold">{scannedItems.length}</span></p>
+                                    </div>
                                 </div>
-                            </div>
+                            </CardContent>
+                        </Card>
+                    )}
 
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Item RFID *</label>
-                                <input
-                                    type="text"
-                                    value={scannedRfid}
-                                    onChange={(e) => setScannedRfid(e.target.value)}
-                                    placeholder="Scan item RFID tag"
-                                    className="w-full px-3 py-2 border rounded-md"
-                                />
-                            </div>
+                    {/* Phase 2: Items Listed */}
+                    {(scanPhase === "items-listed" || scanPhase === "waiting-user") && (
+                        <Card className="border-2">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <span className="text-2xl">✓</span>
+                                    Scanned Items ({scannedItems.length})
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                {scannedItems.length === 0 ? (
+                                    <p className="text-zinc-500 text-center py-8">No items scanned yet</p>
+                                ) : (
+                                    <div className="space-y-2 max-h-64 overflow-y-auto">
+                                        {scannedItems.map((item) => (
+                                            <div key={item.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                                                <div>
+                                                    <p className="font-mono text-sm text-gray-600">{item.rfid_uid}</p>
+                                                    <p className="text-xs text-gray-500">{item.scanned_at}</p>
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleRemoveItem(item.id)}
+                                                    className="text-red-600 hover:text-red-700"
+                                                >
+                                                    <Trash2 className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
 
-                            <Button 
-                                onClick={handleLendOut} 
-                                disabled={loading || !scannedRfid}
-                                className="w-full"
-                            >
-                                {loading ? "Processing..." : "Lend Out Item"}
-                            </Button>
-                        </CardContent>
-                    </Card>
+                    {/* Phase 3: Waiting User Scan */}
+                    {scanPhase === "waiting-user" && (
+                        <Card className="border-2 border-green-200 bg-green-50">
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <span className="text-3xl">👤</span>
+                                    Scan User ID
+                                </CardTitle>
+                                <CardDescription>Scan user's RFID badge or ID</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                <div className="flex flex-col items-center justify-center py-12 space-y-6">
+                                    {/* Breathing Circle - Green */}
+                                    <div className="relative w-32 h-32">
+                                        <div className="absolute inset-0 breathing-pulse-green rounded-full bg-green-100"></div>
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                            <div className="breathing-circle w-24 h-24 bg-gradient-to-br from-green-400 to-green-600 rounded-full flex items-center justify-center text-white text-5xl">
+                                                👤
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div className="text-center">
+                                        {userRfid ? (
+                                            <>
+                                                <div className="flex items-center justify-center gap-2 text-green-900 mb-2">
+                                                    <Check className="h-6 w-6" />
+                                                    <p className="text-lg font-semibold">User Scanned!</p>
+                                                </div>
+                                                <p className="text-sm font-mono text-green-700">{userRfid}</p>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <p className="text-lg font-semibold text-green-900">Waiting for user...</p>
+                                                <p className="text-sm text-green-700 mt-1">Ready to scan {scannedItems.length} item(s)</p>
+                                            </>
+                                        )}
+                                    </div>
+                                </div>
+                            </CardContent>
+                        </Card>
+                    )}
+
+                    {/* Action Buttons */}
+                    <div className="flex gap-2 flex-wrap">
+                        {scanPhase === "waiting-item" && scannedItems.length > 0 && (
+                            <>
+                                <Button 
+                                    onClick={handleExitScan}
+                                    className="bg-blue-600 hover:bg-blue-700 text-white"
+                                >
+                                    Exit Scan ({scannedItems.length})
+                                </Button>
+                                <Button 
+                                    variant="outline"
+                                    onClick={handleReset}
+                                >
+                                    Reset
+                                </Button>
+                            </>
+                        )}
+
+                        {scanPhase === "items-listed" && (
+                            <>
+                                <Button 
+                                    onClick={handleProceedToUserScan}
+                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                >
+                                    Proceed to User Scan
+                                </Button>
+                                <Button 
+                                    onClick={() => setScanPhase("waiting-item")}
+                                    variant="outline"
+                                >
+                                    Scan More Items
+                                </Button>
+                                <Button 
+                                    variant="outline"
+                                    onClick={handleReset}
+                                >
+                                    Cancel
+                                </Button>
+                            </>
+                        )}
+
+                        {scanPhase === "waiting-user" && userRfid && (
+                            <>
+                                <Button 
+                                    onClick={handleBorrow}
+                                    disabled={loading}
+                                    className="bg-green-600 hover:bg-green-700 text-white flex-1"
+                                >
+                                    {loading ? "Processing..." : `Confirm Borrow (${scannedItems.length} items)`}
+                                </Button>
+                                <Button 
+                                    variant="outline"
+                                    onClick={() => {
+                                        setUserRfid("")
+                                        lastScannedRef.current = ""
+                                    }}
+                                >
+                                    Rescan User
+                                </Button>
+                            </>
+                        )}
+                    </div>
                 </div>
-            )}
 
-            {/* Return In Tab */}
-            {activeTab === "in" && (
-                <div className="space-y-4">
-                    <Card>
+                {/* Sidebar: Active Lent Items */}
+                <div>
+                    <Card className="sticky top-4">
                         <CardHeader>
-                            <CardTitle>Return Item</CardTitle>
-                            <CardDescription>Scan the item RFID to mark as returned</CardDescription>
-                        </CardHeader>
-                        <CardContent className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Item RFID</label>
-                                <input
-                                    type="text"
-                                    value={scannedRfid}
-                                    onChange={(e) => setScannedRfid(e.target.value)}
-                                    placeholder="Scan item RFID tag"
-                                    className="w-full px-3 py-2 border rounded-md"
-                                />
+                            <div className="flex justify-between items-center">
+                                <CardTitle className="text-lg">Currently Lent</CardTitle>
+                                <Button 
+                                    variant="ghost" 
+                                    size="icon"
+                                    onClick={loadActiveLentItems}
+                                >
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
                             </div>
-
-                            <Button 
-                                onClick={handleReturnIn} 
-                                disabled={loading || !scannedRfid}
-                                className="w-full bg-green-600 hover:bg-green-700 text-white"
-                            >
-                                {loading ? "Processing..." : "Mark as Returned"}
-                            </Button>
+                            <CardDescription>{activeLentItems.length} item(s) out</CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            {activeLentItems.length === 0 ? (
+                                <p className="text-center text-zinc-500 py-8 text-sm">No items currently lent out</p>
+                            ) : (
+                                <div className="space-y-2 max-h-96 overflow-y-auto">
+                                    {activeLentItems.map((item, idx) => (
+                                        <div key={idx} className="p-3 border rounded-lg bg-yellow-50">
+                                            <p className="font-mono text-xs text-gray-600 truncate">{item.rfid_uid}</p>
+                                            {item.user_name && <p className="text-xs font-semibold mt-1">👤 {item.user_name}</p>}
+                                            <p className="text-xs text-gray-500 mt-1">
+                                                {new Date(item.out_datetime).toLocaleDateString()}
+                                            </p>
+                                            <Button
+                                                size="sm"
+                                                variant="outline"
+                                                onClick={() => handleReturnItem(item.rfid_uid)}
+                                                disabled={loading}
+                                                className="w-full mt-2 text-xs h-7"
+                                            >
+                                                Return
+                                            </Button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 </div>
-            )}
+            </div>
 
-            {/* Active Lent Items Tab */}
-            {activeTab === "active" && (
-                <Card>
+            {/* History Modal */}
+            {showHistory && (
+                <Card className="bg-gray-50">
                     <CardHeader>
-                        <div className="flex justify-between items-center">
-                            <div>
-                                <CardTitle>Currently Lent Items</CardTitle>
-                                <CardDescription>Items that are currently out with users</CardDescription>
-                            </div>
-                            <Button variant="outline" onClick={loadActiveLentItems} className="gap-2">
-                                <RefreshCw className="h-4 w-4" />
-                                Refresh
+                        <CardTitle className="flex justify-between items-center">
+                            <span>Borrow History</span>
+                            <Button 
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => setShowHistory(false)}
+                            >
+                                <XCircle className="h-4 w-4" />
                             </Button>
-                        </div>
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
-                        {activeLentItems.length === 0 ? (
-                            <p className="text-center text-zinc-500 py-8">No items currently lent out</p>
-                        ) : (
-                            <div className="space-y-3">
-                                {activeLentItems.map((item, idx) => (
-                                    <div key={idx} className="p-4 border rounded-lg flex justify-between items-center">
-                                        <div>
-                                            <p className="font-medium">{item.item_name || "Unknown Item"}</p>
-                                            <p className="text-sm text-zinc-500">RFID: {item.rfid_uid}</p>
-                                            {item.user_name && <p className="text-sm text-zinc-600">User: {item.user_name}</p>}
-                                            <p className="text-xs text-zinc-400">Out since: {new Date(item.out_datetime).toLocaleString()}</p>
-                                        </div>
-                                        <Badge className="bg-yellow-100 text-yellow-800">OUT</Badge>
-                                    </div>
-                                ))}
-                            </div>
-                        )}
+                        <p className="text-zinc-500 text-sm">
+                            All lending/borrowing transactions are tracked with timestamps.
+                            Items returned are automatically removed from the "Currently Lent" list.
+                        </p>
                     </CardContent>
                 </Card>
             )}

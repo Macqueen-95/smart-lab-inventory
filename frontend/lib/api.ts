@@ -203,6 +203,14 @@ export const adminFloorPlansAPI = {
     })
     return res.data
   },
+  listAll: async (): Promise<{ success: boolean; floor_plans: FloorPlan[] }> => {
+    const res = await api.get<{ success: boolean; floor_plans: FloorPlan[] }>("/floor-plans")
+    return res.data
+  },
+  listRoomsById: async (planId: number): Promise<{ success: boolean; rooms: Room[] }> => {
+    const res = await api.get<{ success: boolean; rooms: Room[] }>(`/floor-plans/${planId}/rooms`)
+    return res.data
+  },
 }
 
 export const roomsAPI = {
@@ -401,6 +409,35 @@ export const auditingAPI = {
   },
   items: async (auditId: number): Promise<{ success: boolean; items?: any[]; summary?: any; audit?: any; message?: string }> => {
     const res = await api.get<{ success: boolean; items?: any[]; summary?: any; audit?: any; message?: string }>(`/audits/${auditId}/items`)
+    return res.data
+  },
+}
+
+export const periodicAuditAPI = {
+  create: async (data: {
+    floor_plan_id?: number | null
+    room_id: number
+    scanner_id: string
+    interval_type: string
+    note?: string
+  }): Promise<{ success: boolean; audit?: any; message?: string }> => {
+    const res = await api.post<{ success: boolean; audit?: any; message?: string }>("/periodic-audits", data)
+    return res.data
+  },
+  list: async (): Promise<{ success: boolean; audits?: any[]; message?: string }> => {
+    const res = await api.get<{ success: boolean; audits?: any[]; message?: string }>("/periodic-audits")
+    return res.data
+  },
+  get: async (auditId: number): Promise<{ success: boolean; audit?: any; message?: string }> => {
+    const res = await api.get<{ success: boolean; audit?: any; message?: string }>(`/periodic-audits/${auditId}`)
+    return res.data
+  },
+  deactivate: async (auditId: number): Promise<{ success: boolean; message?: string }> => {
+    const res = await api.post<{ success: boolean; message?: string }>(`/periodic-audits/${auditId}/deactivate`)
+    return res.data
+  },
+  activate: async (auditId: number): Promise<{ success: boolean; message?: string }> => {
+    const res = await api.post<{ success: boolean; message?: string }>(`/periodic-audits/${auditId}/activate`)
     return res.data
   },
 }

@@ -16,3 +16,17 @@ CORS enabled with credentials
  * Restarting with stat
  * Debugger is active!
  * Debugger PIN: 583-922-777
+127.0.0.1 - - [05/Feb/2026 20:21:12] "[33mGET /health HTTP/1.1[0m" 404 -
+127.0.0.1 - - [05/Feb/2026 20:21:18] "[31m[1mGET /api/rfid/latest-scan HTTP/1.1[0m" 401 -
+ * Detected change in '/Users/akshay/Desktop/cyber_forge_hackathon/backend/app.py', reloading
+==================================================
+App starting...
+Initializing database...
+DB connected and tables verified.
+Database initialization check completed.
+Starting Flask server on http://0.0.0.0:8000
+CORS enabled with credentials
+==================================================
+ * Restarting with stat
+ * Debugger is active!
+ * Debugger PIN: 583-922-777

@@ -5,8 +5,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
-import { auditingAPI, authAPI } from "@/lib/api"
-import { ChevronLeft, ChevronRight, CalendarCheck, ClipboardCheck } from "lucide-react"
+import { auditingAPI, authAPI, periodicAuditAPI } from "@/lib/api"
+import { ChevronLeft, ChevronRight, CalendarCheck, ClipboardCheck, Zap, X } from "lucide-react"
 
 const getMonthLabel = (date: Date) =>
     date.toLocaleDateString(undefined, { month: "long", year: "numeric" })
@@ -39,6 +39,7 @@ export default function AuditingPage() {
     const [auditsForDate, setAuditsForDate] = useState<any[]>([])
     const [pendingAudits, setPendingAudits] = useState<any[]>([])
     const [monthAudits, setMonthAudits] = useState<any[]>([])
+    const [periodicAudits, setPeriodicAudits] = useState<any[]>([])
     const [isAdmin, setIsAdmin] = useState(false)
 
     const days = useMemo(() => buildCalendarDays(currentMonth), [currentMonth])
@@ -80,13 +81,32 @@ export default function AuditingPage() {
         }
     }
 
+    const loadPeriodicAudits = async () => {
+        if (!isAdmin) return
+        const result = await periodicAuditAPI.list()
+        if (result.success) {
+            setPeriodicAudits(result.audits || [])
+        }
+    }
+
+    const handleDeactivatePeriodicAudit = async (auditId: number) => {
+        const result = await periodicAuditAPI.deactivate(auditId)
+        if (result.success) {
+            await loadPeriodicAudits()
+        }
+    }
+
     useEffect(() => {
         const init = async () => {
             const me = await authAPI.getMe()
-            setIsAdmin(me.success && me.user?.userid === "admin")
+            const admin = me.success && me.user?.userid === "admin"
+            setIsAdmin(admin)
             await loadAudits(selectedDate)
             await loadPending()
             await loadMonthAudits()
+            if (admin) {
+                await loadPeriodicAudits()
+            }
         }
         init()
     }, [])
@@ -225,6 +245,60 @@ export default function AuditingPage() {
                     </Card>
                 </div>
             </div>
+
+            {isAdmin && (
+                <Card>
+                    <CardHeader>
+                        <CardTitle className="flex items-center gap-2">
+                            <Zap className="h-5 w-5 text-yellow-500" />
+                            Active Periodic Scans
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {periodicAudits.length === 0 && (
+                            <p className="text-sm text-zinc-500">No periodic audits configured. 
+                                <Link href="/periodic-audit" className="text-blue-600 hover:underline ml-1">Create one</Link>
+                            </p>
+                        )}
+                        {periodicAudits.length > 0 && (
+                            <div className="space-y-3">
+                                {periodicAudits.map((audit) => (
+                                    <div key={audit.id} className="border rounded p-4 bg-yellow-50 border-yellow-200">
+                                        <div className="flex items-start justify-between">
+                                            <div className="flex-1">
+                                                <div className="font-medium text-yellow-900">{audit.room_name}</div>
+                                                <div className="text-xs text-yellow-700 mt-1">
+                                                    Scanner: <span className="font-mono">{audit.scanner_id}</span>
+                                                </div>
+                                                <div className="text-xs text-yellow-700">
+                                                    Interval: 
+                                                    {audit.interval_type === "24h" && " Every 24 Hours"}
+                                                    {audit.interval_type === "2d" && " Every 2 Days"}
+                                                    {audit.interval_type === "5d" && " Every 5 Days"}
+                                                </div>
+                                                {audit.note && (
+                                                    <div className="text-xs text-yellow-700 mt-1">Note: {audit.note}</div>
+                                                )}
+                                                <div className="text-xs text-yellow-600 mt-2">
+                                                    Next scan: <span className="font-medium">{audit.next_audit_date}</span>
+                                                </div>
+                                            </div>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                onClick={() => handleDeactivatePeriodicAudit(audit.id)}
+                                                className="text-yellow-700 hover:text-red-700"
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            )}
         </div>
     )
 }

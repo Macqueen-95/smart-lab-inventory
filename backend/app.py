@@ -22,6 +22,12 @@ from db_management import (
     get_inventory_item_by_id,
     get_rfid_scan_logs,
     get_latest_unassigned_rfid,
+    create_periodic_audit,
+    get_periodic_audits,
+    get_periodic_audit_by_id,
+    deactivate_periodic_audit,
+    activate_periodic_audit,
+    update_periodic_audit_last_scan,
 )
 from rfid_uid import process_rfid_scan, assign_rfid_uid_to_item
 from serviceandrepair import (
@@ -538,27 +544,43 @@ def api_get_latest_unassigned_rfid():
 @app.route("/api/rfid/latest-scan", methods=["GET"])
 @login_required
 def api_get_latest_scan():
-    """Get the latest RFID scan regardless of status (for service operations)."""
+    """Get the latest RFID scan since a given timestamp (for service operations)."""
     uid = get_current_user_id()
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
     from db_management import get_db_connection
     from psycopg.rows import dict_row
+    from datetime import datetime, timedelta
     
     conn = get_db_connection()
     if not conn:
         return jsonify({"success": False, "message": "Database connection failed"}), 500
     
     try:
+        # Get the 'since' parameter to avoid returning the same scan multiple times
+        since = request.args.get('since')
+        
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute("""
-                SELECT rfid_uid, scanned_at 
-                FROM rfid_scan_logs 
-                WHERE scan_status IN ('OK', 'UNKNOWN')
-                ORDER BY scanned_at DESC 
-                LIMIT 1
-            """)
+            if since:
+                # Return scans AFTER the given timestamp
+                cur.execute("""
+                    SELECT rfid_uid, scanned_at 
+                    FROM rfid_scan_logs 
+                    WHERE scan_status IN ('OK', 'UNKNOWN')
+                    AND scanned_at > %s
+                    ORDER BY scanned_at DESC 
+                    LIMIT 1
+                """, (since,))
+            else:
+                # Return the latest scan
+                cur.execute("""
+                    SELECT rfid_uid, scanned_at 
+                    FROM rfid_scan_logs 
+                    WHERE scan_status IN ('OK', 'UNKNOWN')
+                    ORDER BY scanned_at DESC 
+                    LIMIT 1
+                """)
             result = cur.fetchone()
             
             if result:
@@ -885,6 +907,110 @@ def audit_items_api(audit_id: int):
     if items_status:
         return jsonify({"success": True, **items_status}), 200
     return jsonify({"success": False, "message": "Failed to load audit items"}), 500
+
+
+# ---- Periodic Audits Management ----
+
+@app.route("/api/periodic-audits", methods=["POST"])
+@login_required
+def create_periodic_audit_api():
+    """Create a new periodic audit"""
+    userid = session.get("user_id")
+    if not userid or not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    user_numeric_id = get_current_user_id()
+    if not user_numeric_id:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    data = request.get_json()
+    floor_plan_id = data.get("floor_plan_id")
+    room_id = data.get("room_id")
+    scanner_id = data.get("scanner_id", "").strip()
+    interval_type = data.get("interval_type", "").strip()
+    note = data.get("note", "").strip() or None
+
+    if not room_id or not scanner_id or not interval_type:
+        return jsonify({"success": False, "message": "Missing required fields: room_id, scanner_id, interval_type"}), 400
+
+    if interval_type not in ["24h", "2d", "5d"]:
+        return jsonify({"success": False, "message": "Invalid interval_type. Must be one of: 24h, 2d, 5d"}), 400
+
+    audit = create_periodic_audit(user_numeric_id, floor_plan_id, room_id, scanner_id, interval_type, note)
+    if audit:
+        return jsonify({"success": True, "audit": audit}), 201
+    return jsonify({"success": False, "message": "Failed to create periodic audit"}), 500
+
+
+@app.route("/api/periodic-audits", methods=["GET"])
+@login_required
+def list_periodic_audits_api():
+    """List periodic audits for the current user"""
+    userid = session.get("user_id")
+    if not userid or not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    user_numeric_id = get_current_user_id()
+    if not user_numeric_id:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    audits = get_periodic_audits(user_numeric_id, is_active=True)
+    return jsonify({"success": True, "audits": audits}), 200
+
+
+@app.route("/api/periodic-audits/<int:audit_id>", methods=["GET"])
+@login_required
+def get_periodic_audit_api(audit_id: int):
+    """Get a specific periodic audit"""
+    userid = session.get("user_id")
+    if not userid or not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    user_numeric_id = get_current_user_id()
+    if not user_numeric_id:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    audit = get_periodic_audit_by_id(audit_id, user_numeric_id)
+    if not audit:
+        return jsonify({"success": False, "message": "Periodic audit not found"}), 404
+
+    return jsonify({"success": True, "audit": audit}), 200
+
+
+@app.route("/api/periodic-audits/<int:audit_id>/deactivate", methods=["POST"])
+@login_required
+def deactivate_periodic_audit_api(audit_id: int):
+    """Deactivate a periodic audit"""
+    userid = session.get("user_id")
+    if not userid or not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    user_numeric_id = get_current_user_id()
+    if not user_numeric_id:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    success = deactivate_periodic_audit(audit_id, user_numeric_id)
+    if success:
+        return jsonify({"success": True, "message": "Periodic audit deactivated"}), 200
+    return jsonify({"success": False, "message": "Failed to deactivate periodic audit"}), 500
+
+
+@app.route("/api/periodic-audits/<int:audit_id>/activate", methods=["POST"])
+@login_required
+def activate_periodic_audit_api(audit_id: int):
+    """Activate a periodic audit"""
+    userid = session.get("user_id")
+    if not userid or not is_admin_user(userid):
+        return jsonify({"success": False, "message": "Admin access required"}), 403
+
+    user_numeric_id = get_current_user_id()
+    if not user_numeric_id:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    success = activate_periodic_audit(audit_id, user_numeric_id)
+    if success:
+        return jsonify({"success": True, "message": "Periodic audit activated"}), 200
+    return jsonify({"success": False, "message": "Failed to activate periodic audit"}), 500
 
 
 # ---- Lend/Borrow Management ----
