@@ -420,6 +420,55 @@ export const auditingAPI = {
   },
 }
 
+export interface ConfidenceScore {
+  confidence: number
+  status: "Present" | "Likely Present" | "Uncertain" | "Likely Missing"
+  minutes_since_last_scan: number | null
+  scan_count_last_hour: number
+  last_scan_at: string | null
+  error?: string
+}
+
+export const confidenceAPI = {
+  getItemConfidence: async (
+    itemId: number,
+    decayFactor?: number,
+    useFrequencyBoost?: boolean
+  ): Promise<{ success: boolean } & ConfidenceScore> => {
+    const params: any = {}
+    if (decayFactor !== undefined) params.decay_factor = decayFactor
+    if (useFrequencyBoost !== undefined) params.use_frequency_boost = useFrequencyBoost
+    const res = await api.get<{ success: boolean } & ConfidenceScore>(`/items/${itemId}/confidence`, { params })
+    return res.data
+  },
+  getRoomItemsConfidence: async (
+    roomId: number,
+    decayFactor?: number,
+    useFrequencyBoost?: boolean
+  ): Promise<{ success: boolean; confidence_scores: Record<string, ConfidenceScore> }> => {
+    const params: any = {}
+    if (decayFactor !== undefined) params.decay_factor = decayFactor
+    if (useFrequencyBoost !== undefined) params.use_frequency_boost = useFrequencyBoost
+    const res = await api.get<{ success: boolean; confidence_scores: Record<string, ConfidenceScore> }>(
+      `/rooms/${roomId}/items/confidence`,
+      { params }
+    )
+    return res.data
+  },
+  getItemsConfidenceBatch: async (data: {
+    item_ids?: number[]
+    rfid_uids?: string[]
+    decay_factor?: number
+    use_frequency_boost?: boolean
+  }): Promise<{ success: boolean; confidence_scores: Record<string, ConfidenceScore> }> => {
+    const res = await api.post<{ success: boolean; confidence_scores: Record<string, ConfidenceScore> }>(
+      "/items/confidence",
+      data
+    )
+    return res.data
+  },
+}
+
 export const periodicAuditAPI = {
   create: async (data: {
     floor_plan_id?: number | null

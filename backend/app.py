@@ -44,6 +44,12 @@ from lendborrow import (
     get_lend_borrow_history,
     get_user_by_rfid,
 )
+from inventory_confidence_system import (
+    get_item_confidence,
+    get_items_with_confidence,
+    calculate_confidence,
+    get_confidence_status,
+)
 from auditing import (
     create_audit,
     list_audits,
@@ -1068,6 +1074,87 @@ def get_user_by_rfid_endpoint(rfid_uid):
         return jsonify({"success": True, "user": user}), 200
     else:
         return jsonify({"success": False, "message": "User not found"}), 404
+
+
+# ---- Inventory Confidence System ----
+
+@app.route("/api/items/<int:item_id>/confidence", methods=["GET"])
+@login_required
+def get_item_confidence_endpoint(item_id):
+    """Get confidence score for an item by ID."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    # Get item's RFID UID
+    item = get_inventory_item_by_id(item_id, uid)
+    if not item:
+        return jsonify({"success": False, "message": "Item not found"}), 404
+
+    rfid_uid = item.get("rfid_uid")
+    if not rfid_uid:
+        return jsonify({
+            "success": False,
+            "message": "Item has no RFID UID assigned",
+            "confidence": 0.0,
+            "status": "Likely Missing",
+        }), 200
+
+    # Get decay_factor from query params (optional, default 30)
+    decay_factor = float(request.args.get("decay_factor", 30.0))
+    use_frequency_boost = request.args.get("use_frequency_boost", "true").lower() == "true"
+
+    confidence_data = get_item_confidence(rfid_uid, decay_factor, use_frequency_boost)
+    return jsonify({"success": True, **confidence_data}), 200
+
+
+@app.route("/api/items/confidence", methods=["POST"])
+@login_required
+def get_items_confidence_batch():
+    """Get confidence scores for multiple items. Body: item_ids (list) or rfid_uids (list)."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    data = request.get_json() or {}
+    item_ids = data.get("item_ids")
+    rfid_uids = data.get("rfid_uids")
+
+    decay_factor = float(data.get("decay_factor", 30.0))
+    use_frequency_boost = data.get("use_frequency_boost", True)
+
+    if not item_ids and not rfid_uids:
+        return jsonify({"success": False, "message": "item_ids or rfid_uids required"}), 400
+
+    results = get_items_with_confidence(item_ids, rfid_uids, decay_factor, use_frequency_boost)
+    return jsonify({"success": True, "confidence_scores": results}), 200
+
+
+@app.route("/api/rooms/<int:room_id>/items/confidence", methods=["GET"])
+@login_required
+def get_room_items_confidence(room_id):
+    """Get confidence scores for all items in a room."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+
+    # Verify room belongs to user
+    room = get_room_by_id(room_id, uid)
+    if not room:
+        return jsonify({"success": False, "message": "Room not found"}), 404
+
+    # Get items in room
+    items = get_inventory_items_by_room(room_id)
+    rfid_uids = [item["rfid_uid"] for item in items if item.get("rfid_uid")]
+
+    decay_factor = float(request.args.get("decay_factor", 30.0))
+    use_frequency_boost = request.args.get("use_frequency_boost", "true").lower() == "true"
+
+    if not rfid_uids:
+        return jsonify({"success": True, "confidence_scores": {}}), 200
+
+    results = get_items_with_confidence(rfid_uids=rfid_uids, decay_factor=decay_factor, use_frequency_boost=use_frequency_boost)
+    return jsonify({"success": True, "confidence_scores": results}), 200
 
 
 @app.route("/api/user/profile", methods=["PATCH"])
