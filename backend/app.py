@@ -62,6 +62,8 @@ from auditing import (
     generate_audit_report,
     get_audit_items_status,
 )
+from audit_report_generation import generate_audit_pdf
+from flask import Response
 import os
 from functools import wraps
 
@@ -966,10 +968,33 @@ def audit_report_api(audit_id: int):
     if not is_admin_user(userid) and audit.get("assigned_userid") != userid:
         return jsonify({"success": False, "message": "Forbidden"}), 403
 
+    # Check if PDF format is requested
+    format_type = request.args.get("format", "json").lower()
+    
     report = generate_audit_report(audit_id)
-    if report:
-        return jsonify({"success": True, "report": report}), 200
-    return jsonify({"success": False, "message": "Failed to generate report"}), 500
+    if not report:
+        return jsonify({"success": False, "message": "Failed to generate report"}), 500
+    
+    if format_type == "pdf":
+        try:
+            pdf_buffer = generate_audit_pdf(report)
+            filename = f"audit_report_{audit_id}_{audit.get('scheduled_date', 'unknown')}.pdf"
+            return Response(
+                pdf_buffer.getvalue(),
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'attachment; filename={filename}',
+                    'Content-Type': 'application/pdf'
+                }
+            )
+        except Exception as e:
+            print(f"Error generating PDF: {e}")
+            import traceback
+            traceback.print_exc()
+            return jsonify({"success": False, "message": f"Failed to generate PDF: {str(e)}"}), 500
+    
+    # Default: return JSON
+    return jsonify({"success": True, "report": report}), 200
 
 
 @app.route("/api/audits/<int:audit_id>/items", methods=["GET"])

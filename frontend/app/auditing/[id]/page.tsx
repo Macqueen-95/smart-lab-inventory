@@ -67,11 +67,45 @@ export default function AuditDetailPage() {
 
     const handleReport = async () => {
         setError(null)
-        const res = await auditingAPI.report(auditId)
-        if (res.success) {
-            setReport(res.report)
-        } else {
-            setError(res.message || "Failed to generate report")
+        try {
+            // Generate and download PDF
+            // Use the same base URL logic as the API client
+            const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL 
+                ? process.env.NEXT_PUBLIC_API_URL.replace(/\/+$/, "").replace(/\/api$/, "")
+                : (typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+                    ? 'https://cyber-forge-1.onrender.com'
+                    : 'http://localhost:8000')
+            
+            const response = await fetch(`${apiBaseUrl}/api/audits/${auditId}/report?format=pdf`, {
+                method: 'GET',
+                credentials: 'include',
+            })
+            
+            if (!response.ok) {
+                const errorData = await response.json().catch(() => ({}))
+                setError(errorData.message || "Failed to generate report")
+                return
+            }
+            
+            // Download the PDF
+            const blob = await response.blob()
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `audit_report_${auditId}_${audit?.scheduled_date || 'unknown'}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            window.URL.revokeObjectURL(url)
+            document.body.removeChild(a)
+            
+            // Also load JSON report for display
+            const jsonRes = await auditingAPI.report(auditId)
+            if (jsonRes.success) {
+                setReport(jsonRes.report)
+            }
+        } catch (e) {
+            console.error("Error generating report:", e)
+            setError("Failed to generate report: " + (e instanceof Error ? e.message : String(e)))
         }
     }
 
@@ -133,11 +167,12 @@ export default function AuditDetailPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         {itemsSummary && (
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
                                 <div><span className="text-zinc-500">Expected</span><div className="font-semibold">{itemsSummary.total_expected}</div></div>
                                 <div><span className="text-zinc-500">Scanned</span><div className="font-semibold">{itemsSummary.scanned}</div></div>
                                 <div><span className="text-zinc-500">Missing</span><div className="font-semibold">{itemsSummary.missing}</div></div>
                                 <div><span className="text-zinc-500">In Service</span><div className="font-semibold">{itemsSummary.in_service}</div></div>
+                                <div><span className="text-zinc-500">Borrowed</span><div className="font-semibold">{itemsSummary.borrowed || 0}</div></div>
                             </div>
                         )}
                         {items.length === 0 && (
@@ -153,6 +188,9 @@ export default function AuditDetailPage() {
                                         )}
                                         {item.status === "IN_SERVICE" && (
                                             <Badge className="bg-yellow-100 text-yellow-800 border-yellow-300">In Service</Badge>
+                                        )}
+                                        {item.status === "BORROWED" && (
+                                            <Badge className="bg-blue-100 text-blue-800 border-blue-300">Borrowed</Badge>
                                         )}
                                         {item.status === "MISSING" && (
                                             <Badge className="bg-red-100 text-red-800 border-red-300">Missing</Badge>
@@ -207,15 +245,16 @@ export default function AuditDetailPage() {
                         <CardTitle>Audit Report</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-sm">
+                        <div className="grid grid-cols-2 md:grid-cols-6 gap-4 text-sm">
                             <div><span className="text-zinc-500">Expected</span><div className="font-semibold">{report.summary.total_expected}</div></div>
                             <div><span className="text-zinc-500">Scanned</span><div className="font-semibold">{report.summary.scanned}</div></div>
                             <div><span className="text-zinc-500">Missing</span><div className="font-semibold">{report.summary.missing}</div></div>
                             <div><span className="text-zinc-500">In Service</span><div className="font-semibold">{report.summary.in_service}</div></div>
+                            <div><span className="text-zinc-500">Borrowed</span><div className="font-semibold">{report.summary.borrowed || 0}</div></div>
                             <div><span className="text-zinc-500">Unexpected</span><div className="font-semibold">{report.summary.unexpected}</div></div>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                             <div>
                                 <h4 className="font-medium mb-2">Missing Items</h4>
                                 {report.missing_items.length === 0 && <p className="text-sm text-zinc-500">None</p>}
@@ -230,6 +269,16 @@ export default function AuditDetailPage() {
                                 <h4 className="font-medium mb-2">Items Under Service</h4>
                                 {report.in_service_items.length === 0 && <p className="text-sm text-zinc-500">None</p>}
                                 {report.in_service_items.map((i: any) => (
+                                    <div key={i.rfid_uid} className="text-sm border rounded p-2 mb-2">
+                                        <div className="font-medium">{i.item_name}</div>
+                                        <div className="text-xs text-zinc-500">{i.rfid_uid}</div>
+                                    </div>
+                                ))}
+                            </div>
+                            <div>
+                                <h4 className="font-medium mb-2">Borrowed Items</h4>
+                                {(report.borrowed_items || []).length === 0 && <p className="text-sm text-zinc-500">None</p>}
+                                {(report.borrowed_items || []).map((i: any) => (
                                     <div key={i.rfid_uid} className="text-sm border rounded p-2 mb-2">
                                         <div className="font-medium">{i.item_name}</div>
                                         <div className="text-xs text-zinc-500">{i.rfid_uid}</div>

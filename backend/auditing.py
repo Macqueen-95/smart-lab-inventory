@@ -228,8 +228,12 @@ def generate_audit_report(audit_id):
             expected_items = [dict(r) for r in cur.fetchall()]
             expected_items = [i for i in expected_items if i.get("rfid_uid")]
 
-            cur.execute("SELECT rfid_uid FROM service")
+            cur.execute("SELECT rfid_uid FROM service WHERE rfid_uid IS NOT NULL")
             in_service_set = {r[0] for r in cur.fetchall()}
+
+            # Get borrowed items (items currently lent out)
+            cur.execute("SELECT rfid_uid FROM lend_borrow WHERE status = 'OUT' AND rfid_uid IS NOT NULL")
+            borrowed_set = {r[0] for r in cur.fetchall()}
 
             scanned_set = set()
             if audit.get("scanner_id") and audit.get("started_at"):
@@ -247,8 +251,14 @@ def generate_audit_report(audit_id):
             expected_set = set(expected_map.keys())
 
             in_service_items = [expected_map[uid] for uid in expected_set if uid in in_service_set]
-            missing_uids = [uid for uid in expected_set if uid not in scanned_set and uid not in in_service_set]
+            borrowed_items = [expected_map[uid] for uid in expected_set if uid in borrowed_set]
+            # Missing items exclude those in service or borrowed (only truly missing)
+            missing_uids = [uid for uid in expected_set if uid not in scanned_set and uid not in in_service_set and uid not in borrowed_set]
             missing_items = [expected_map[uid] for uid in missing_uids]
+            
+            # Ensure borrowed_set is defined (for backward compatibility)
+            if 'borrowed_set' not in locals():
+                borrowed_set = set()
             unexpected_items = [
                 {"rfid_uid": uid}
                 for uid in scanned_set
@@ -260,6 +270,7 @@ def generate_audit_report(audit_id):
                 "scanned": len(scanned_set),
                 "missing": len(missing_items),
                 "in_service": len(in_service_items),
+                "borrowed": len(borrowed_items),
                 "unexpected": len(unexpected_items),
                 "all_present": len(missing_items) == 0,
             }
@@ -269,6 +280,7 @@ def generate_audit_report(audit_id):
                 "summary": summary,
                 "missing_items": missing_items,
                 "in_service_items": in_service_items,
+                "borrowed_items": borrowed_items,
                 "unexpected_items": unexpected_items,
             }
     except Exception as e:
@@ -332,6 +344,10 @@ def get_audit_items_status(audit_id):
             cur.execute("SELECT rfid_uid FROM service WHERE rfid_uid IS NOT NULL")
             in_service_set = {r["rfid_uid"] for r in cur.fetchall()}
 
+            # Get borrowed items (items currently lent out)
+            cur.execute("SELECT rfid_uid FROM lend_borrow WHERE status = 'OUT' AND rfid_uid IS NOT NULL")
+            borrowed_set = {r["rfid_uid"] for r in cur.fetchall()}
+
             scanned_set = set()
             if audit.get("scanner_id") and audit.get("started_at"):
                 cur.execute(
@@ -348,6 +364,7 @@ def get_audit_items_status(audit_id):
             missing = 0
             in_service = 0
             scanned = 0
+            borrowed = 0
 
             # Process items with RFID
             for item in expected_items:
@@ -358,6 +375,9 @@ def get_audit_items_status(audit_id):
                 elif uid in in_service_set:
                     status = "IN_SERVICE"
                     in_service += 1
+                elif uid in borrowed_set:
+                    status = "BORROWED"
+                    borrowed += 1
                 else:
                     status = "MISSING"
                     missing += 1
@@ -372,6 +392,7 @@ def get_audit_items_status(audit_id):
                 "scanned": scanned,
                 "missing": missing,
                 "in_service": in_service,
+                "borrowed": borrowed,
                 "no_rfid": len(items_without_rfid),
             }
 

@@ -3,3 +3,4 @@ flask-cors==4.0.0
 Werkzeug==3.0.1
 psycopg[binary]
 Flask-Session==0.8.0
+reportlab==4.0.7

@@ -59,7 +59,9 @@ export default function OutForServicePage() {
 
         setError(null)
         try {
-            const res = await serviceAPI.getItemByRfid(scannedRfid)
+            // URL encode the RFID UID to handle special characters like colons
+            const encodedRfid = encodeURIComponent(scannedRfid.trim())
+            const res = await serviceAPI.getItemByRfid(encodedRfid)
             if (res.success && res.item) {
                 // Check if already in cart
                 if (cart.some(i => i.rfid_uid === scannedRfid)) {

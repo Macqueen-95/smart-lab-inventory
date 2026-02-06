@@ -389,6 +389,8 @@ export const serviceAPI = {
   },
   getItemByRfid: async (rfid_uid: string, requireOutForService: boolean = false) => {
     const params = requireOutForService ? { require_out: "true" } : {}
+    // Ensure RFID UID is properly URL encoded
+    const encodedRfid = encodeURIComponent(rfid_uid)
     const res = await api.get<{
       success: boolean
       item?: {
@@ -399,7 +401,7 @@ export const serviceAPI = {
         floor_title: string
       }
       message?: string
-    }>(`/service/item-by-rfid/${rfid_uid}`, { params })
+    }>(`/service/item-by-rfid/${encodedRfid}`, { params })
     return res.data
   },
 }
