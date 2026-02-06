@@ -23,7 +23,7 @@ export default function LogsPage() {
                 console.log("Loaded logs:", result.logs.length, "logs")
                 setScanLogs(result.logs)
             } else {
-                setError(result.message || "Failed to load logs")
+                setError("Failed to load logs")
             }
         } catch (e) {
             console.error("Error loading logs:", e)
@@ -158,8 +158,8 @@ export default function LogsPage() {
                 <span>
                     {scanLogs.filter((l) => l.scan_status === "OK").length} found,{" "}
                     {scanLogs.filter((l) => l.scan_status === "UNKNOWN").length} unknown,{" "}
-                    {scanLogs.filter((l) => l.is_out_for_service === true || l.is_out_for_service === "true").length} out for service,{" "}
-                    {scanLogs.filter((l) => l.is_borrowed === true || l.is_borrowed === "true").length} borrowed
+                    {scanLogs.filter((l) => l.is_out_for_service === true).length} out for service,{" "}
+                    {scanLogs.filter((l) => l.is_borrowed === true).length} borrowed
                 </span>
             </div>
 
@@ -226,24 +226,24 @@ export default function LogsPage() {
                                     </td>
                                     <td className="px-3 py-2 whitespace-nowrap">
                                         <div className="flex flex-wrap gap-1">
-                                            {(log.is_out_for_service === true || log.is_out_for_service === "true") && (
+                                            {log.is_out_for_service && (
                                                 <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-[10px] px-1.5 py-0.5">
                                                     <Wrench className="h-2.5 w-2.5 mr-0.5 inline" />
                                                     Service
                                                 </Badge>
                                             )}
-                                            {(log.is_borrowed === true || log.is_borrowed === "true") && (
+                                            {log.is_borrowed && (
                                                 <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-[10px] px-1.5 py-0.5">
                                                     <Hand className="h-2.5 w-2.5 mr-0.5 inline" />
                                                     Borrowed
                                                 </Badge>
                                             )}
-                                            {(log.is_out_for_service === true || log.is_out_for_service === "true") && log.service_out_date && (
+                                            {log.is_out_for_service && log.service_out_date && (
                                                 <div className="text-[9px] text-orange-600 mt-0.5 w-full">
                                                     Out: {new Date(log.service_out_date).toLocaleDateString()}
                                                 </div>
                                             )}
-                                            {(log.is_borrowed === true || log.is_borrowed === "true") && log.borrowed_out_date && (
+                                            {log.is_borrowed && log.borrowed_out_date && (
                                                 <div className="text-[9px] text-blue-600 mt-0.5 w-full">
                                                     {log.borrowed_to_user ? `To: ${log.borrowed_to_user}` : "Borrowed"}: {new Date(log.borrowed_out_date).toLocaleDateString()}
                                                 </div>

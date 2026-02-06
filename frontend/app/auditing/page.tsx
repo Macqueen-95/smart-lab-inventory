@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/Card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/Card"
 import { Button } from "@/components/ui/Button"
 import { auditingAPI, authAPI, periodicAuditAPI } from "@/lib/api"
 import { ChevronLeft, ChevronRight, CalendarCheck, ClipboardCheck, Zap, X } from "lucide-react"

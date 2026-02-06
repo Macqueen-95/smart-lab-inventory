@@ -32,7 +32,7 @@ export default function InventoryPage() {
                     console.log("Loaded items:", res.items.length, "items")
                     setAllItems(res.items)
                 } else {
-                    if (!cancelled) setError(res.message || "Failed to load inventory")
+                    if (!cancelled) setError("Failed to load inventory")
                 }
             } catch (e) {
                 console.error("Error loading inventory:", e)
@@ -65,9 +65,9 @@ export default function InventoryPage() {
     }, [allItems])
 
     const filteredItems = allItems.filter((item) => {
-        // Status filter - handle both boolean and string values
-        const isOutForService = item.is_out_for_service === true || item.is_out_for_service === "true"
-        const isBorrowed = item.is_borrowed === true || item.is_borrowed === "true"
+        // Status filter - handle boolean values
+        const isOutForService = item.is_out_for_service === true
+        const isBorrowed = item.is_borrowed === true
         
         if (statusFilter === "service" && !isOutForService) return false
         if (statusFilter === "borrowed" && !isBorrowed) return false
@@ -125,9 +125,9 @@ export default function InventoryPage() {
 
     const stats = {
         total: allItems.length,
-        available: allItems.filter(i => !(i.is_out_for_service === true || i.is_out_for_service === "true") && !(i.is_borrowed === true || i.is_borrowed === "true")).length,
-        service: allItems.filter(i => i.is_out_for_service === true || i.is_out_for_service === "true").length,
-        borrowed: allItems.filter(i => i.is_borrowed === true || i.is_borrowed === "true").length,
+        available: allItems.filter(i => !i.is_out_for_service && !i.is_borrowed).length,
+        service: allItems.filter(i => i.is_out_for_service === true).length,
+        borrowed: allItems.filter(i => i.is_borrowed === true).length,
     }
 
     return (
@@ -246,13 +246,13 @@ export default function InventoryPage() {
                                 )}
                                 {/* Status badges overlay */}
                                 <div className="absolute top-2 right-2 flex gap-1">
-                                    {(item.is_out_for_service === true || item.is_out_for_service === "true") && (
+                                    {item.is_out_for_service && (
                                         <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-xs">
                                             <Wrench className="h-3 w-3 mr-1" />
                                             Service
                                         </Badge>
                                     )}
-                                    {(item.is_borrowed === true || item.is_borrowed === "true") && (
+                                    {item.is_borrowed && (
                                         <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-xs">
                                             <Hand className="h-3 w-3 mr-1" />
                                             Borrowed
@@ -310,7 +310,7 @@ export default function InventoryPage() {
                                 )}
 
                                 {/* Service Status */}
-                                {(item.is_out_for_service === true || item.is_out_for_service === "true") && item.service_out_date && (
+                                {item.is_out_for_service && item.service_out_date && (
                                     <div className="text-xs text-orange-600 bg-orange-50 p-2 rounded border border-orange-200">
                                         <div className="font-medium">Out for Service</div>
                                         <div className="text-orange-700">Since: {formatTimestamp(item.service_out_date)}</div>
@@ -318,7 +318,7 @@ export default function InventoryPage() {
                                 )}
 
                                 {/* Borrowed Status */}
-                                {(item.is_borrowed === true || item.is_borrowed === "true") && item.borrowed_out_date && (
+                                {item.is_borrowed && item.borrowed_out_date && (
                                     <div className="text-xs text-blue-600 bg-blue-50 p-2 rounded border border-blue-200">
                                         <div className="font-medium">Borrowed</div>
                                         {item.borrowed_to_user && (
