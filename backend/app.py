@@ -20,6 +20,7 @@ from db_management import (
     create_inventory_item,
     create_bulk_inventory_items,
     get_inventory_items_by_room,
+    get_all_inventory_items_with_status,
     update_inventory_item_icon,
     get_inventory_item_by_id,
     get_rfid_scan_logs,
@@ -534,7 +535,7 @@ def api_process_rfid_scan():
 @app.route("/api/rfid/scan-logs", methods=["GET"])
 @login_required
 def api_get_rfid_scan_logs():
-    """Get RFID scan logs."""
+    """Get RFID scan logs with service and borrowed status."""
     uid = get_current_user_id()
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
@@ -543,6 +544,18 @@ def api_get_rfid_scan_logs():
     logs = get_rfid_scan_logs(uid, limit)
     
     return jsonify({"success": True, "logs": logs}), 200
+
+
+@app.route("/api/inventory/all-with-status", methods=["GET"])
+@login_required
+def api_get_all_items_with_status():
+    """Get all inventory items with service/borrowed status, timestamps, and location info."""
+    uid = get_current_user_id()
+    if not uid:
+        return jsonify({"success": False, "message": "User not found"}), 404
+    
+    items = get_all_inventory_items_with_status(uid)
+    return jsonify({"success": True, "items": items}), 200
 
 
 @app.route("/api/rfid/latest-unassigned", methods=["GET"])
@@ -606,10 +619,15 @@ def api_get_latest_scan():
 
 # ---- Service & Repair Routes ----
 
-@app.route("/api/service/out", methods=["POST"])
-@login_required
+@app.route("/api/service/out", methods=["POST", "OPTIONS"])
 def send_out_for_service():
     """Send an item out for service."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    
+    if "user_id" not in session:
+        return jsonify({"success": False, "message": "Login required"}), 401
+    
     try:
         uid = session.get("user_id")
         if not uid:
@@ -649,10 +667,15 @@ def send_out_for_service():
         return jsonify({"success": False, "message": f"Server error: {str(e)}"}), 500
 
 
-@app.route("/api/service/in", methods=["POST"])
-@login_required
+@app.route("/api/service/in", methods=["POST", "OPTIONS"])
 def receive_from_service():
     """Mark an item as returned from service."""
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    
+    if "user_id" not in session:
+        return jsonify({"success": False, "message": "Login required"}), 401
+    
     try:
         uid = session.get("user_id")
         if not uid:
@@ -713,12 +736,17 @@ def list_service_history():
     return jsonify({"success": True, "history": history}), 200
 
 
-@app.route("/api/service/item-by-rfid/<rfid_uid>", methods=["GET"])
-@login_required
+@app.route("/api/service/item-by-rfid/<rfid_uid>", methods=["GET", "OPTIONS"])
 def get_item_for_service(rfid_uid):
     """Get item details by RFID for service operations.
     Query param 'require_out' can be set to 'true' to only return items out for service.
     """
+    if request.method == "OPTIONS":
+        return jsonify({}), 200
+    
+    if "user_id" not in session:
+        return jsonify({"success": False, "message": "Login required"}), 401
+    
     uid = session.get("user_id")
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404

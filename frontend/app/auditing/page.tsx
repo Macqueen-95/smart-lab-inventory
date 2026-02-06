@@ -274,49 +274,69 @@ export default function AuditingPage() {
                     <CardHeader>
                         <CardTitle className="flex items-center gap-2">
                             <Zap className="h-5 w-5 text-yellow-500" />
-                            Active Periodic Scans
+                            Assigned Periodic Scans
                         </CardTitle>
+                        <CardDescription>
+                            {periodicAudits.length === 0 
+                                ? "No periodic scans configured"
+                                : `${periodicAudits.length} ${periodicAudits.length === 1 ? "active periodic scan" : "active periodic scans"}`
+                            }
+                        </CardDescription>
                     </CardHeader>
                     <CardContent>
                         {periodicAudits.length === 0 && (
-                            <p className="text-sm text-zinc-500">No periodic audits configured. 
-                                <Link href="/periodic-audit" className="text-blue-600 hover:underline ml-1">Create one</Link>
-                            </p>
+                            <div className="text-center py-4">
+                                <p className="text-sm text-zinc-500 mb-2">No periodic audits configured.</p>
+                                <Link href="/periodic-audit">
+                                    <Button variant="outline" size="sm" className="text-blue-600 border-blue-300">
+                                        Create Periodic Scan
+                                    </Button>
+                                </Link>
+                            </div>
                         )}
                         {periodicAudits.length > 0 && (
                             <div className="space-y-3">
-                                {periodicAudits.map((audit) => (
-                                    <div key={audit.id} className="border rounded p-4 bg-yellow-50 border-yellow-200">
-                                        <div className="flex items-start justify-between">
-                                            <div className="flex-1">
-                                                <div className="font-medium text-yellow-900">{audit.room_name}</div>
-                                                <div className="text-xs text-yellow-700 mt-1">
-                                                    Scanner: <span className="font-mono">{audit.scanner_id}</span>
+                                {periodicAudits.map((audit) => {
+                                    const today = new Date().toISOString().split('T')[0]
+                                    const isToday = audit.next_audit_date === today
+                                    return (
+                                        <div key={audit.id} className={`border rounded p-4 ${isToday ? "bg-yellow-100 border-yellow-400" : "bg-yellow-50 border-yellow-200"}`}>
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <div className="font-medium text-yellow-900">{audit.room_name}</div>
+                                                        {isToday && (
+                                                            <span className="text-xs bg-yellow-600 text-white px-2 py-0.5 rounded">Scheduled Today</span>
+                                                        )}
+                                                    </div>
+                                                    <div className="text-xs text-yellow-700 mt-1">
+                                                        Scanner: <span className="font-mono">{audit.scanner_id}</span>
+                                                    </div>
+                                                    <div className="text-xs text-yellow-700">
+                                                        Interval: 
+                                                        {audit.interval_type === "24h" && " Every 24 Hours"}
+                                                        {audit.interval_type === "2d" && " Every 2 Days"}
+                                                        {audit.interval_type === "5d" && " Every 5 Days"}
+                                                    </div>
+                                                    {audit.note && (
+                                                        <div className="text-xs text-yellow-700 mt-1">Note: {audit.note}</div>
+                                                    )}
+                                                    <div className="text-xs text-yellow-600 mt-2">
+                                                        Next scan: <span className="font-medium">{audit.next_audit_date}</span>
+                                                    </div>
                                                 </div>
-                                                <div className="text-xs text-yellow-700">
-                                                    Interval: 
-                                                    {audit.interval_type === "24h" && " Every 24 Hours"}
-                                                    {audit.interval_type === "2d" && " Every 2 Days"}
-                                                    {audit.interval_type === "5d" && " Every 5 Days"}
-                                                </div>
-                                                {audit.note && (
-                                                    <div className="text-xs text-yellow-700 mt-1">Note: {audit.note}</div>
-                                                )}
-                                                <div className="text-xs text-yellow-600 mt-2">
-                                                    Next scan: <span className="font-medium">{audit.next_audit_date}</span>
-                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="icon"
+                                                    onClick={() => handleDeactivatePeriodicAudit(audit.id)}
+                                                    className="text-yellow-700 hover:text-red-700"
+                                                >
+                                                    <X className="h-4 w-4" />
+                                                </Button>
                                             </div>
-                                            <Button
-                                                variant="ghost"
-                                                size="icon"
-                                                onClick={() => handleDeactivatePeriodicAudit(audit.id)}
-                                                className="text-yellow-700 hover:text-red-700"
-                                            >
-                                                <X className="h-4 w-4" />
-                                            </Button>
                                         </div>
-                                    </div>
-                                ))}
+                                    )
+                                })}
                             </div>
                         )}
                     </CardContent>

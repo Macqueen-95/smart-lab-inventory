@@ -524,8 +524,8 @@ def log_rfid_scan(rfid_uid: str, scanner_id: str, scan_status: str, item_name: s
 
 def get_rfid_scan_logs(user_id: int, limit: int = 100):
     """
-    Get RFID scan logs (all scans, not user-scoped for display purposes).
-    Returns: list of scan log dicts
+    Get RFID scan logs with service and borrowed status flags.
+    Returns: list of scan log dicts with is_out_for_service and is_borrowed flags
     """
     conn = get_db_connection()
     if not conn:
@@ -534,15 +534,81 @@ def get_rfid_scan_logs(user_id: int, limit: int = 100):
     try:
         with conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                """SELECT id, rfid_uid, scanner_id, scan_status, item_name, room, scanned_at
-                   FROM rfid_scan_logs
-                   ORDER BY scanned_at DESC
+                """SELECT 
+                    l.id, 
+                    l.rfid_uid, 
+                    l.scanner_id, 
+                    l.scan_status, 
+                    l.item_name, 
+                    l.room, 
+                    l.scanned_at,
+                    CASE WHEN s.id IS NOT NULL THEN true ELSE false END as is_out_for_service,
+                    CASE WHEN lb.id IS NOT NULL AND lb.status = 'OUT' THEN true ELSE false END as is_borrowed,
+                    s.out_datetime as service_out_date,
+                    lb.out_datetime as borrowed_out_date,
+                    u.name as borrowed_to_user
+                   FROM rfid_scan_logs l
+                   LEFT JOIN service s ON l.rfid_uid = s.rfid_uid
+                   LEFT JOIN lend_borrow lb ON l.rfid_uid = lb.rfid_uid AND lb.status = 'OUT'
+                   LEFT JOIN users u ON lb.userid = u.userid
+                   ORDER BY l.scanned_at DESC
                    LIMIT %s""",
                 (limit,),
             )
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"get_rfid_scan_logs error: {e}")
+        return []
+    finally:
+        conn.close()
+
+
+def get_all_inventory_items_with_status(user_id: int):
+    """
+    Get all inventory items with service and borrowed status, last scan, and location info.
+    Returns: list of item dicts with status flags and metadata
+    """
+    conn = get_db_connection()
+    if not conn:
+        return []
+    
+    try:
+        with conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                """SELECT 
+                    i.id,
+                    i.item_name,
+                    i.rfid_uid,
+                    i.item_count,
+                    i.item_icon_url,
+                    i.room_id,
+                    i.created_at,
+                    r.room_name,
+                    r.room_description,
+                    f.floor_title,
+                    f.floor_description,
+                    CASE WHEN s.id IS NOT NULL THEN true ELSE false END as is_out_for_service,
+                    CASE WHEN lb.id IS NOT NULL AND lb.status = 'OUT' THEN true ELSE false END as is_borrowed,
+                    s.out_datetime as service_out_date,
+                    lb.out_datetime as borrowed_out_date,
+                    u.name as borrowed_to_user,
+                    lb.userid as borrowed_to_userid,
+                    (SELECT scanned_at FROM rfid_scan_logs 
+                     WHERE rfid_uid = i.rfid_uid 
+                     ORDER BY scanned_at DESC LIMIT 1) as last_scanned_at
+                   FROM inventory_items i
+                   LEFT JOIN rooms r ON i.room_id = r.id
+                   LEFT JOIN floor_plans f ON r.floor_plan_id = f.id
+                   LEFT JOIN service s ON i.rfid_uid = s.rfid_uid
+                   LEFT JOIN lend_borrow lb ON i.rfid_uid = lb.rfid_uid AND lb.status = 'OUT'
+                   LEFT JOIN users u ON lb.userid = u.userid
+                   WHERE r.user_id = %s
+                   ORDER BY i.created_at DESC""",
+                (user_id,),
+            )
+            return [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        print(f"get_all_inventory_items_with_status error: {e}")
         return []
     finally:
         conn.close()

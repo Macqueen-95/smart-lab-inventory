@@ -1,10 +1,11 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Search, RefreshCw, RotateCcw } from "lucide-react"
+import { Search, RefreshCw, RotateCcw, Wrench, Hand } from "lucide-react"
 import { rfidAPI, type RFIDScanLog } from "@/lib/api"
 import { Button } from "@/components/ui/Button"
 import { Input } from "@/components/ui/Input"
+import { Badge } from "@/components/ui/Badge"
 
 export default function LogsPage() {
     const [scanLogs, setScanLogs] = useState<RFIDScanLog[]>([])
@@ -54,6 +55,20 @@ export default function LogsPage() {
         return date.toLocaleString()
     }
 
+    const getTimeAgo = (dateString: string) => {
+        const date = new Date(dateString)
+        const now = new Date()
+        const diffMs = now.getTime() - date.getTime()
+        const diffMins = Math.floor(diffMs / 60000)
+        const diffHours = Math.floor(diffMs / 3600000)
+        const diffDays = Math.floor(diffMs / 86400000)
+
+        if (diffMins < 1) return "Just now"
+        if (diffMins < 60) return `${diffMins} min ago`
+        if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`
+        return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
+    }
+
     return (
         <div className="flex flex-col h-full bg-white text-black font-sans text-sm">
             {/* Header */}
@@ -61,7 +76,7 @@ export default function LogsPage() {
                 <div className="flex justify-between items-center">
                     <div>
                         <h2 className="text-2xl font-bold text-black">RFID Scan Logs</h2>
-                        <p className="text-gray-600 text-sm">Real-time RFID scanning activity</p>
+                        <p className="text-gray-600 text-sm">Complete scan history with status tracking</p>
                     </div>
                     <Button onClick={loadLogs} variant="outline" size="sm" disabled={isLoading}>
                         <RefreshCw className="h-4 w-4 mr-2" />
@@ -140,7 +155,9 @@ export default function LogsPage() {
                 </span>
                 <span>
                     {scanLogs.filter((l) => l.scan_status === "OK").length} found,{" "}
-                    {scanLogs.filter((l) => l.scan_status === "UNKNOWN").length} unknown
+                    {scanLogs.filter((l) => l.scan_status === "UNKNOWN").length} unknown,{" "}
+                    {scanLogs.filter((l) => l.is_out_for_service).length} out for service,{" "}
+                    {scanLogs.filter((l) => l.is_borrowed).length} borrowed
                 </span>
             </div>
 
@@ -154,7 +171,7 @@ export default function LogsPage() {
                     <table className="w-full border-collapse text-xs font-mono">
                         <thead className="bg-gray-200 sticky top-0 z-10">
                             <tr className="divide-x divide-gray-300 border-b border-gray-300">
-                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[140px]">
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[160px]">
                                     Scanned At
                                 </th>
                                 <th className="text-left px-3 py-2 font-semibold text-gray-700 min-w-[140px]">
@@ -167,39 +184,69 @@ export default function LogsPage() {
                                     Item Name
                                 </th>
                                 <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[100px]">
-                                    Room
+                                    Location
                                 </th>
                                 <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[100px]">
                                     Scanner ID
+                                </th>
+                                <th className="text-left px-3 py-2 font-semibold text-gray-700 w-[140px]">
+                                    Flags
                                 </th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {filteredLogs.map((log) => (
                                 <tr key={log.id} className="hover:bg-blue-50 divide-x divide-gray-200">
-                                    <td className="px-3 py-1 whitespace-nowrap text-gray-600">
-                                        {formatDate(log.scanned_at)}
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        <div className="text-gray-600">{formatDate(log.scanned_at)}</div>
+                                        <div className="text-gray-400 text-[10px]">{getTimeAgo(log.scanned_at)}</div>
                                     </td>
-                                    <td className="px-3 py-1 whitespace-nowrap font-semibold text-gray-800">
+                                    <td className="px-3 py-2 whitespace-nowrap font-semibold text-gray-800">
                                         {log.rfid_uid}
                                     </td>
-                                    <td className={`px-3 py-1 whitespace-nowrap font-bold ${
+                                    <td className={`px-3 py-2 whitespace-nowrap font-bold ${
                                         log.scan_status === "OK"
                                             ? "text-green-700 bg-green-50"
                                             : "text-orange-700 bg-orange-50"
                                     }`}>
                                         {log.scan_status}
                                     </td>
-                                    <td className="px-3 py-1 whitespace-nowrap max-w-[120px] truncate text-gray-800"
+                                    <td className="px-3 py-2 whitespace-nowrap max-w-[120px] truncate text-gray-800"
                                         title={log.item_name || "Unknown"}>
                                         {log.item_name || "—"}
                                     </td>
-                                    <td className="px-3 py-1 whitespace-nowrap max-w-[100px] truncate text-gray-800"
+                                    <td className="px-3 py-2 whitespace-nowrap max-w-[100px] truncate text-gray-800"
                                         title={log.room || "Unknown"}>
                                         {log.room || "—"}
                                     </td>
-                                    <td className="px-3 py-1 whitespace-nowrap text-gray-700">
+                                    <td className="px-3 py-2 whitespace-nowrap text-gray-700">
                                         {log.scanner_id}
+                                    </td>
+                                    <td className="px-3 py-2 whitespace-nowrap">
+                                        <div className="flex flex-wrap gap-1">
+                                            {log.is_out_for_service && (
+                                                <Badge className="bg-orange-100 text-orange-800 border-orange-300 text-[10px] px-1.5 py-0.5">
+                                                    <Wrench className="h-2.5 w-2.5 mr-0.5 inline" />
+                                                    Service
+                                                </Badge>
+                                            )}
+                                            {log.is_borrowed && (
+                                                <Badge className="bg-blue-100 text-blue-800 border-blue-300 text-[10px] px-1.5 py-0.5">
+                                                    <Hand className="h-2.5 w-2.5 mr-0.5 inline" />
+                                                    Borrowed
+                                                </Badge>
+                                            )}
+                                            {log.is_out_for_service && log.service_out_date && (
+                                                <div className="text-[9px] text-orange-600 mt-0.5 w-full">
+                                                    Out: {new Date(log.service_out_date).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                            {log.is_borrowed && log.borrowed_out_date && (
+                                                <div className="text-[9px] text-blue-600 mt-0.5 w-full">
+                                                    {log.borrowed_to_user ? `To: ${log.borrowed_to_user}` : "Borrowed"}: {new Date(log.borrowed_out_date).toLocaleDateString()}
+                                                </div>
+                                            )}
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

@@ -60,16 +60,14 @@ export default function Home() {
           totalRooms: rooms.length,
         })
 
-        // Load today's scheduled periodic scans
+        // Load all assigned periodic scans (for admin)
         if (admin) {
           try {
             const periodicRes = await periodicAuditAPI.list()
             if (periodicRes.success && periodicRes.audits) {
-              const today = new Date().toISOString().split('T')[0]
-              const todayScansList = periodicRes.audits.filter((audit: any) => {
-                return audit.next_audit_date === today && audit.is_active
-              })
-              setTodayScans(todayScansList)
+              // Show all active periodic scans, not just today's
+              const allScans = periodicRes.audits.filter((audit: any) => audit.is_active)
+              setTodayScans(allScans)
             }
           } catch (e) {
             console.error("Failed to load periodic audits:", e)
@@ -90,39 +88,65 @@ export default function Home() {
         <p className="text-zinc-500 dark:text-zinc-400">Overview of your smart campus inventory.</p>
       </div>
 
-      {/* Notice Section - Today's Scheduled Scans */}
-      {isAdmin && todayScans.length > 0 && (
+      {/* Notice Section - Assigned Periodic Scans */}
+      {isAdmin && (
         <Card className="border-blue-200 bg-blue-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5 text-blue-600" />
-              Notice: Scheduled Scans Today
+              Assigned Periodic Scans
             </CardTitle>
             <CardDescription>
-              {todayScans.length} {todayScans.length === 1 ? "room" : "rooms"} scheduled for periodic scanning today
+              {todayScans.length === 0 
+                ? "No periodic scans configured"
+                : `${todayScans.length} ${todayScans.length === 1 ? "active periodic scan" : "active periodic scans"} configured`
+              }
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-2">
-              {todayScans.map((scan: any) => (
-                <div key={scan.id} className="flex items-center justify-between p-3 bg-white rounded-lg border border-blue-200">
-                  <div className="flex-1">
-                    <p className="font-medium text-zinc-900">{scan.room_name}</p>
-                    <p className="text-sm text-zinc-600">
-                      Scanner: <span className="font-mono">{scan.scanner_id}</span>
-                    </p>
-                    {scan.note && (
-                      <p className="text-xs text-zinc-500 mt-1">{scan.note}</p>
-                    )}
-                  </div>
-                  <Link href="/auditing">
-                    <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
-                      View →
-                    </button>
-                  </Link>
-                </div>
-              ))}
-            </div>
+            {todayScans.length === 0 ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-zinc-500 mb-2">No periodic scans assigned yet.</p>
+                <Link href="/periodic-audit">
+                  <button className="text-blue-600 hover:text-blue-700 text-sm font-medium underline">
+                    Create periodic scan →
+                  </button>
+                </Link>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {todayScans.map((scan: any) => {
+                  const today = new Date().toISOString().split('T')[0]
+                  const isToday = scan.next_audit_date === today
+                  return (
+                    <div key={scan.id} className={`flex items-center justify-between p-3 bg-white rounded-lg border ${isToday ? "border-blue-400 bg-blue-50" : "border-blue-200"}`}>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-zinc-900">{scan.room_name}</p>
+                          {isToday && (
+                            <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded">Today</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-zinc-600">
+                          Scanner: <span className="font-mono">{scan.scanner_id}</span>
+                        </p>
+                        <p className="text-xs text-zinc-500 mt-1">
+                          Next scan: <span className="font-medium">{scan.next_audit_date}</span>
+                        </p>
+                        {scan.note && (
+                          <p className="text-xs text-zinc-500 mt-1">{scan.note}</p>
+                        )}
+                      </div>
+                      <Link href="/auditing">
+                        <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                          View →
+                        </button>
+                      </Link>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

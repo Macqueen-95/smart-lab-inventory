@@ -135,6 +135,16 @@ export interface InventoryItem {
   room_id: number
   created_at: string
   last_scanned_at?: string | null
+  is_out_for_service?: boolean
+  is_borrowed?: boolean
+  service_out_date?: string | null
+  borrowed_out_date?: string | null
+  borrowed_to_user?: string | null
+  borrowed_to_userid?: string | null
+  room_name?: string | null
+  room_description?: string | null
+  floor_title?: string | null
+  floor_description?: string | null
 }
 
 export interface Audit {
@@ -251,6 +261,10 @@ export const itemsAPI = {
     const res = await api.get<{ success: boolean; items: InventoryItem[] }>(`/rooms/${roomId}/items`)
     return res.data
   },
+  listAllWithStatus: async (): Promise<{ success: boolean; items: InventoryItem[] }> => {
+    const res = await api.get<{ success: boolean; items: InventoryItem[] }>("/inventory/all-with-status")
+    return res.data
+  },
   create: async (
     roomId: number,
     data: { item_name: string; item_quantity?: number; item_icon_url?: string }
@@ -302,6 +316,11 @@ export interface RFIDScanLog {
   scanner_id: string
   scan_status: string
   scanned_at: string
+  is_out_for_service?: boolean
+  is_borrowed?: boolean
+  service_out_date?: string | null
+  borrowed_out_date?: string | null
+  borrowed_to_user?: string | null
 }
 
 export const rfidAPI = {
