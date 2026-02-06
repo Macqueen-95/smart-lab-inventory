@@ -542,8 +542,8 @@ def get_rfid_scan_logs(user_id: int, limit: int = 100):
                     l.item_name, 
                     l.room, 
                     l.scanned_at,
-                    CASE WHEN s.id IS NOT NULL THEN true ELSE false END as is_out_for_service,
-                    CASE WHEN lb.id IS NOT NULL AND lb.status = 'OUT' THEN true ELSE false END as is_borrowed,
+                    (CASE WHEN s.id IS NOT NULL THEN true ELSE false END)::boolean as is_out_for_service,
+                    (CASE WHEN lb.id IS NOT NULL AND lb.status = 'OUT' THEN true ELSE false END)::boolean as is_borrowed,
                     s.out_datetime as service_out_date,
                     lb.out_datetime as borrowed_out_date,
                     u.name as borrowed_to_user
@@ -587,8 +587,8 @@ def get_all_inventory_items_with_status(user_id: int):
                     r.room_description,
                     f.floor_title,
                     f.floor_description,
-                    CASE WHEN s.id IS NOT NULL THEN true ELSE false END as is_out_for_service,
-                    CASE WHEN lb.id IS NOT NULL AND lb.status = 'OUT' THEN true ELSE false END as is_borrowed,
+                    (CASE WHEN s.id IS NOT NULL THEN true ELSE false END)::boolean as is_out_for_service,
+                    (CASE WHEN lb.id IS NOT NULL AND lb.status = 'OUT' THEN true ELSE false END)::boolean as is_borrowed,
                     s.out_datetime as service_out_date,
                     lb.out_datetime as borrowed_out_date,
                     u.name as borrowed_to_user,
@@ -716,9 +716,10 @@ def create_periodic_audit(user_id: int, floor_plan_id: int, room_id: int, scanne
         conn.close()
 
 
-def get_periodic_audits(user_id: int, is_active: bool = True):
+def get_periodic_audits(user_id: int = None, is_active: bool = True, get_all: bool = False):
     """
-    Get all periodic audits for a user.
+    Get periodic audits.
+    If get_all is True, returns all audits regardless of user_id (for admins).
     Returns: list of periodic audit dicts
     """
     conn = get_db_connection()
@@ -726,32 +727,59 @@ def get_periodic_audits(user_id: int, is_active: bool = True):
         return []
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            if is_active:
-                cur.execute(
-                    """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
-                              pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
-                              pa.last_audit_date, pa.created_at,
-                              f.floor_title, r.room_name
-                       FROM periodic_audits pa
-                       LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
-                       LEFT JOIN rooms r ON pa.room_id = r.id
-                       WHERE pa.user_id = %s AND pa.is_active = true
-                       ORDER BY pa.next_audit_date ASC""",
-                    (user_id,),
-                )
+            if get_all:
+                # Admin: get all audits
+                if is_active:
+                    cur.execute(
+                        """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
+                                  pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
+                                  pa.last_audit_date, pa.created_at,
+                                  f.floor_title, r.room_name
+                         FROM periodic_audits pa
+                         LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
+                         LEFT JOIN rooms r ON pa.room_id = r.id
+                         WHERE pa.is_active = true
+                         ORDER BY pa.next_audit_date ASC"""
+                    )
+                else:
+                    cur.execute(
+                        """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
+                                  pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
+                                  pa.last_audit_date, pa.created_at,
+                                  f.floor_title, r.room_name
+                         FROM periodic_audits pa
+                         LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
+                         LEFT JOIN rooms r ON pa.room_id = r.id
+                         ORDER BY pa.next_audit_date DESC"""
+                    )
             else:
-                cur.execute(
-                    """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
-                              pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
-                              pa.last_audit_date, pa.created_at,
-                              f.floor_title, r.room_name
-                       FROM periodic_audits pa
-                       LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
-                       LEFT JOIN rooms r ON pa.room_id = r.id
-                       WHERE pa.user_id = %s
-                       ORDER BY pa.next_audit_date DESC""",
-                    (user_id,),
-                )
+                # User-specific audits
+                if is_active:
+                    cur.execute(
+                        """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
+                                  pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
+                                  pa.last_audit_date, pa.created_at,
+                                  f.floor_title, r.room_name
+                         FROM periodic_audits pa
+                         LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
+                         LEFT JOIN rooms r ON pa.room_id = r.id
+                         WHERE pa.user_id = %s AND pa.is_active = true
+                         ORDER BY pa.next_audit_date ASC""",
+                        (user_id,),
+                    )
+                else:
+                    cur.execute(
+                        """SELECT pa.id, pa.floor_plan_id, pa.room_id, pa.scanner_id, 
+                                  pa.interval_type, pa.note, pa.is_active, pa.next_audit_date, 
+                                  pa.last_audit_date, pa.created_at,
+                                  f.floor_title, r.room_name
+                         FROM periodic_audits pa
+                         LEFT JOIN floor_plans f ON pa.floor_plan_id = f.id
+                         LEFT JOIN rooms r ON pa.room_id = r.id
+                         WHERE pa.user_id = %s
+                         ORDER BY pa.next_audit_date DESC""",
+                        (user_id,),
+                    )
             return [dict(r) for r in cur.fetchall()]
     except Exception as e:
         print(f"get_periodic_audits error: {e}")

@@ -104,6 +104,9 @@ CORS(
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Skip authentication for OPTIONS requests (CORS preflight)
+        if request.method == "OPTIONS":
+            return jsonify({}), 200
         if "user_id" not in session:
             return jsonify({"success": False, "message": "Login required"}), 401
         return f(*args, **kwargs)
@@ -737,15 +740,11 @@ def list_service_history():
 
 
 @app.route("/api/service/item-by-rfid/<rfid_uid>", methods=["GET", "OPTIONS"])
+@login_required
 def get_item_for_service(rfid_uid):
     """Get item details by RFID for service operations.
     Query param 'require_out' can be set to 'true' to only return items out for service.
     """
-    if request.method == "OPTIONS":
-        return jsonify({}), 200
-    
-    if "user_id" not in session:
-        return jsonify({"success": False, "message": "Login required"}), 401
     
     uid = session.get("user_id")
     if not uid:
@@ -1029,16 +1028,23 @@ def create_periodic_audit_api():
 @app.route("/api/periodic-audits", methods=["GET"])
 @login_required
 def list_periodic_audits_api():
-    """List periodic audits for the current user"""
+    """List periodic audits. Admins see all audits, regular users see their own."""
     userid = session.get("user_id")
-    if not userid or not is_admin_user(userid):
-        return jsonify({"success": False, "message": "Admin access required"}), 403
-
-    user_numeric_id = get_current_user_id()
-    if not user_numeric_id:
+    if not userid:
         return jsonify({"success": False, "message": "User not found"}), 404
 
-    audits = get_periodic_audits(user_numeric_id, is_active=True)
+    is_admin = is_admin_user(userid)
+    
+    if is_admin:
+        # Admin: get all periodic audits
+        audits = get_periodic_audits(get_all=True, is_active=True)
+    else:
+        # Regular user: get their own audits
+        user_numeric_id = get_current_user_id()
+        if not user_numeric_id:
+            return jsonify({"success": False, "message": "User not found"}), 404
+        audits = get_periodic_audits(user_numeric_id, is_active=True)
+
     return jsonify({"success": True, "audits": audits}), 200
 
 
