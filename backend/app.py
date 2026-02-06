@@ -741,12 +741,17 @@ def list_service_history():
     return jsonify({"success": True, "history": history}), 200
 
 
-@app.route("/api/service/item-by-rfid/<rfid_uid>", methods=["GET", "OPTIONS"])
+@app.route("/api/service/item-by-rfid/<path:rfid_uid>", methods=["GET", "OPTIONS"])
 @login_required
 def get_item_for_service(rfid_uid):
     """Get item details by RFID for service operations.
     Query param 'require_out' can be set to 'true' to only return items out for service.
+    Uses <path:rfid_uid> to handle special characters like colons in RFID UIDs.
     """
+    from urllib.parse import unquote
+    
+    # Decode the RFID UID in case it was URL encoded
+    rfid_uid = unquote(rfid_uid)
     
     uid = session.get("user_id")
     if not uid:
@@ -754,6 +759,8 @@ def get_item_for_service(rfid_uid):
     
     # Check query param to see if we need to require item to be out for service
     require_out = request.args.get("require_out", "false").lower() == "true"
+    
+    print(f"[GET ITEM FOR SERVICE] RFID UID: {rfid_uid}, require_out: {require_out}")
     
     item = get_item_by_rfid_for_service(rfid_uid, require_out_for_service=require_out)
     

@@ -59,12 +59,10 @@ export default function OutForServicePage() {
 
         setError(null)
         try {
-            // URL encode the RFID UID to handle special characters like colons
-            const encodedRfid = encodeURIComponent(scannedRfid.trim())
-            const res = await serviceAPI.getItemByRfid(encodedRfid)
+            const res = await serviceAPI.getItemByRfid(scannedRfid.trim())
             if (res.success && res.item) {
                 // Check if already in cart
-                if (cart.some(i => i.rfid_uid === scannedRfid)) {
+                if (cart.some(i => i.rfid_uid === scannedRfid.trim())) {
                     setError("Item already in cart")
                     return
                 }
@@ -79,10 +77,12 @@ export default function OutForServicePage() {
                 setSuccess(`Added ${res.item.item_name} to cart`)
                 setTimeout(() => setSuccess(null), 3000)
             } else {
-                setError("Item not found")
+                setError(res.message || "Item not found")
             }
-        } catch (e) {
-            setError("Failed to fetch item details")
+        } catch (e: any) {
+            console.error("Error fetching item:", e)
+            const errorMsg = e.response?.data?.message || e.message || "Failed to fetch item details"
+            setError(errorMsg)
         }
     }
 
