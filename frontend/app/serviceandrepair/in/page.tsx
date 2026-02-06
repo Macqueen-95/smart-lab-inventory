@@ -60,7 +60,8 @@ export default function InFromServicePage() {
 
         setError(null)
         try {
-            const res = await serviceAPI.getItemByRfid(scannedRfid)
+            // For receiving items, we need items that are currently out for service
+            const res = await serviceAPI.getItemByRfid(scannedRfid, true)
             if (res.success && res.item) {
                 // Check if already in cart
                 if (cart.some(i => i.rfid_uid === scannedRfid)) {
@@ -79,10 +80,11 @@ export default function InFromServicePage() {
                 setSuccess(`Added ${res.item.item_name} to cart`)
                 setTimeout(() => setSuccess(null), 3000)
             } else {
-                setError("Item not found")
+                setError((res as any).message || "Item not found or not currently out for service")
             }
-        } catch (e) {
-            setError("Failed to fetch item details")
+        } catch (e: any) {
+            const errorMsg = e.response?.data?.message || e.message || "Failed to fetch item details"
+            setError(errorMsg)
         }
     }
 
@@ -96,13 +98,28 @@ export default function InFromServicePage() {
         setError(null)
 
         try {
+            const errors: string[] = []
             for (const item of cart) {
-                // Use item_id for backend lookup, fall back to rfid_uid
-                await serviceAPI.receiveIn(item.rfid_uid)
+                try {
+                    const result = await serviceAPI.receiveIn(item.rfid_uid)
+                    if (!result.success) {
+                        errors.push(`${item.item_name}: ${result.message || "Failed to receive"}`)
+                    }
+                } catch (e: any) {
+                    errors.push(`${item.item_name}: ${e.response?.data?.message || e.message || "Failed to receive"}`)
+                }
             }
-            router.push("/serviceandrepair")
-        } catch (e) {
-            setError("Failed to receive items from service")
+            
+            if (errors.length > 0) {
+                setError(`Failed to receive some items: ${errors.join(", ")}`)
+            } else {
+                setSuccess("All items received successfully!")
+                setTimeout(() => {
+                    router.push("/serviceandrepair")
+                }, 1500)
+            }
+        } catch (e: any) {
+            setError(e.response?.data?.message || e.message || "Failed to receive items from service")
         } finally {
             setIsSaving(false)
         }

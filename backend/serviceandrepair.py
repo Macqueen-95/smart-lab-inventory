@@ -246,23 +246,43 @@ def get_all_service_history():
             conn.close()
 
 
-def get_item_by_rfid_for_service(rfid_uid: str):
-    """Get item details by RFID for service operations."""
+def get_item_by_rfid_for_service(rfid_uid: str, require_out_for_service: bool = False):
+    """Get item details by RFID for service operations.
+    
+    Args:
+        rfid_uid: The RFID UID to look up
+        require_out_for_service: If True, only return items that are currently out for service
+    """
     conn = get_db_connection()
     if not conn:
         return None
     try:
         with conn.cursor(row_factory=dict_row) as cur:
-            cur.execute("""
-                SELECT 
-                    i.id, i.item_name, i.rfid_uid,
-                    r.room_name,
-                    f.floor_title
-                FROM inventory_items i
-                LEFT JOIN rooms r ON i.room_id = r.id
-                LEFT JOIN floor_plans f ON r.floor_plan_id = f.id
-                WHERE i.rfid_uid = %s
-            """, (rfid_uid,))
+            if require_out_for_service:
+                # Only return items that are currently out for service
+                cur.execute("""
+                    SELECT 
+                        i.id, i.item_name, i.rfid_uid,
+                        r.room_name,
+                        f.floor_title
+                    FROM inventory_items i
+                    LEFT JOIN rooms r ON i.room_id = r.id
+                    LEFT JOIN floor_plans f ON r.floor_plan_id = f.id
+                    INNER JOIN service s ON s.rfid_uid = i.rfid_uid
+                    WHERE i.rfid_uid = %s
+                """, (rfid_uid,))
+            else:
+                # Return any item with this RFID
+                cur.execute("""
+                    SELECT 
+                        i.id, i.item_name, i.rfid_uid,
+                        r.room_name,
+                        f.floor_title
+                    FROM inventory_items i
+                    LEFT JOIN rooms r ON i.room_id = r.id
+                    LEFT JOIN floor_plans f ON r.floor_plan_id = f.id
+                    WHERE i.rfid_uid = %s
+                """, (rfid_uid,))
             item = cur.fetchone()
             return dict(item) if item else None
     except Exception as e:

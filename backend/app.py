@@ -716,17 +716,43 @@ def list_service_history():
 @app.route("/api/service/item-by-rfid/<rfid_uid>", methods=["GET"])
 @login_required
 def get_item_for_service(rfid_uid):
-    """Get item details by RFID for service operations."""
+    """Get item details by RFID for service operations.
+    Query param 'require_out' can be set to 'true' to only return items out for service.
+    """
     uid = session.get("user_id")
     if not uid:
         return jsonify({"success": False, "message": "User not found"}), 404
     
-    item = get_item_by_rfid_for_service(rfid_uid)
+    # Check query param to see if we need to require item to be out for service
+    require_out = request.args.get("require_out", "false").lower() == "true"
     
-    if item:
-        return jsonify({"success": True, "item": item}), 200
-    else:
+    item = get_item_by_rfid_for_service(rfid_uid, require_out_for_service=require_out)
+    
+    if not item:
+        if require_out:
+            return jsonify({
+                "success": False, 
+                "message": "Item not found or not currently out for service"
+            }), 404
         return jsonify({"success": False, "message": "Item not found"}), 404
+    
+    # If not requiring out, but we want to check status, verify it's not already out
+    if not require_out:
+        conn = get_db_connection()
+        if conn:
+            try:
+                with conn.cursor(row_factory=dict_row) as cur:
+                    cur.execute("SELECT id FROM service WHERE rfid_uid = %s", (rfid_uid,))
+                    service_record = cur.fetchone()
+                    if service_record:
+                        # Item is already out for service - this is fine for "in" flow
+                        pass
+            except Exception as e:
+                print(f"Error checking service status: {e}")
+            finally:
+                conn.close()
+    
+    return jsonify({"success": True, "item": item}), 200
 
 
 # ---- Auditing ----

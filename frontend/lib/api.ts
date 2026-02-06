@@ -368,7 +368,8 @@ export const serviceAPI = {
     const res = await api.get<{ success: boolean; history: ServiceRecord[] }>("/service/history")
     return res.data
   },
-  getItemByRfid: async (rfid_uid: string) => {
+  getItemByRfid: async (rfid_uid: string, requireOutForService: boolean = false) => {
+    const params = requireOutForService ? { require_out: "true" } : {}
     const res = await api.get<{
       success: boolean
       item?: {
@@ -378,7 +379,8 @@ export const serviceAPI = {
         room_name: string
         floor_title: string
       }
-    }>(`/service/item-by-rfid/${rfid_uid}`)
+      message?: string
+    }>(`/service/item-by-rfid/${rfid_uid}`, { params })
     return res.data
   },
 }
