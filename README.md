@@ -5,7 +5,7 @@
 
 **Smart Lab Inventory** is a comprehensive Enterprise Asset Management (EAM) system designed for laboratories and facilities to track equipment, manage spaces, and streamline lending processes using RFID technology. Built during a hackathon, this project integrates modern web technologies with robust backend services.
 
-[**Live Demo**](https://smart-lab-inventory.vercel.app)
+[**Live Demo**](https://cyber-forge-taupe.vercel.app)
 
 
 ## 🌟 Key Features
