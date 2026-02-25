@@ -55,7 +55,6 @@ Lend, borrow, and track inventory items ease.
 
 <div style="display: flex; gap: 10px; margin-bottom: 20px;">
   <img src="docs/images/lend_borrow.png" alt="Lend Borrow Interface" width="45%">
-  <img src="docs/images/profile.png" alt="User Profile" width="45%">
 </div>
 
 ## 🎥 Demo Video
