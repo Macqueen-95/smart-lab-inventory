@@ -60,9 +60,11 @@ Lend, borrow, and track inventory items ease.
 
 ## 🎥 Demo Video
 
-*(Link your demo video here or embed it if hosted on a platform like YouTube)*
+<video src="docs/images/demo_video.mp4" width="100%" controls>
+  Your browser does not support the video tag.
+</video>
 
-[Watch the Demo Video](docs/Demo Video.mp4)
+[Watch the Demo Video](docs/images/demo_video.mp4)
 
 ## 🚀 Getting Started
 
